@@ -1,0 +1,5 @@
+/* Pretendard — static subset CDN (no FOUT) */
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
+
+/* Instrument Serif — for mom letters / emotional quotes only */
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap');
