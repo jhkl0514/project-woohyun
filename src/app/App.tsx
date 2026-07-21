@@ -28,7 +28,6 @@ const T = {
   glassCard:  "bg-white/75 backdrop-blur-xl border border-white/90",
   heroGrad:   "linear-gradient(148deg, #1a40c4 0%, #2563EB 42%, #4f46e5 100%)",
   font:       "'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-  serif:      "'Instrument Serif', Georgia, serif",
   mono:       "'SF Mono', 'JetBrains Mono', ui-monospace, monospace",
 };
 
@@ -44,7 +43,7 @@ type StudySubject = {
   id: string; name: string; icon: LucideIcon;
   color: string; bg: string;
   time: number; difficulty: 1 | 2 | 3; exp: number;
-  mission: string; recommended?: boolean;
+  mission: string; recommended?: boolean; done: boolean;
 };
 
 type Screen = "home" | "briefing" | "select" | "mission" | "focus" | "photo" | "reward" | "reflection" | "daily-review" | "tree-evolution" | "growth-dashboard" | "calendar" | "mom-dashboard" | "notifications" | "settings" | "admin" | "goal-setting" | "schedule-list" | "weekly-plan";
@@ -266,6 +265,7 @@ function buildTodaySubjects(date: string, dayPlans: DayPlanOverrides, history: R
 /** 과목 선택 화면(StudySubjectCard)에 넣을 오늘의 후보 목록 — 가장 부족한 과목에 추천 표시 */
 function buildTodayStudySubjects(date: string, dayPlans: DayPlanOverrides, history: Record<string, string[]>): StudySubject[] {
   const ids = getCheckedSubjectIds(date, dayPlans);
+  const doneIds = new Set(history[date] ?? []);
   const shortfall = getWeeklyShortfall(history, date, dayPlans);
   const mostUrgent = [...shortfall].sort((a, b) => b.missing - a.missing)[0]?.subjectId;
   return ids.map(id => {
@@ -274,7 +274,8 @@ function buildTodayStudySubjects(date: string, dayPlans: DayPlanOverrides, histo
       id: s.id, name: s.name, icon: s.icon, color: s.color, bg: s.bg,
       time: s.time, difficulty: s.difficulty, exp: s.exp,
       mission: pickMissionText(date, id),
-      recommended: id === mostUrgent,
+      recommended: id === mostUrgent && !doneIds.has(id),
+      done: doneIds.has(id),
     };
   });
 }
@@ -329,18 +330,24 @@ function getBadgeStatus(ctx: BadgeCtx) {
 }
 
 /** 이번 주(월~일) 공부일 진행 상태 — 홈 화면 · 성장 화면 공통 */
-function getCurrentWeekStatus(history: Record<string, string[]>, todayStr: string) {
+function getCurrentWeekStatus(history: Record<string, string[]>, todayStr: string, dayPlans: DayPlanOverrides = {}) {
   const { start } = getWeekRange(todayStr);
   return Array.from({ length: 7 }, (_, i) => {
-    const date  = addDaysStr(start, i);
-    const sched = FULL_SCHEDULE.find(d => d.date === date);
+    const date   = addDaysStr(start, i);
+    const sched  = FULL_SCHEDULE.find(d => d.date === date);
+    const isRest = !sched || sched.kind !== "study";
+    const planned = isRest ? [] : getCheckedSubjectIds(date, dayPlans);
+    const doneCount = (history[date] ?? []).filter(id => planned.includes(id)).length;
     return {
       day: "일월화수목금토"[parseYMD(date).getDay()],
       date,
       isToday:  date === todayStr,
       isFuture: diffDaysStr(todayStr, date) > 0,
-      isRest:   !sched || sched.kind !== "study",
-      done:     (history[date]?.length ?? 0) > 0,
+      isRest,
+      total: planned.length,
+      doneCount,
+      done:     planned.length > 0 && doneCount >= planned.length,
+      partial:  doneCount > 0 && doneCount < planned.length,
     };
   });
 }
@@ -664,12 +671,12 @@ function TopNav({
   return (
     <nav className="sticky top-0 z-50 backdrop-blur-2xl bg-white/85 border-b border-black/[0.06]"
       style={{ boxShadow:"0 1px 24px rgba(17,24,39,0.07)", fontFamily:T.font }}>
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-10 h-[60px] flex items-center justify-between gap-4">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-10 h-[60px] flex items-center gap-3">
 
         {/* Left: back button or logo */}
         {onBack ? (
           <button onClick={onBack}
-            className="flex items-center gap-1.5 text-[#111827]/50 hover:text-[#111827] transition-colors z-10 flex-shrink-0">
+            className="flex items-center gap-1.5 text-[#111827]/70 hover:text-[#111827] transition-colors z-10 flex-shrink-0">
             <ChevronLeft className="w-5 h-5"/>
             <span className="text-[13px] font-semibold hidden sm:block">{backLabel}</span>
           </button>
@@ -681,42 +688,42 @@ function TopNav({
             </div>
             <div className="hidden sm:block leading-none">
               <p className="text-[13px] font-bold text-[#111827] tracking-tight">PROJECT WOOHYUN</p>
-              <p className="text-[10px] text-[#111827]/35 tracking-tight mt-[2px]"
+              <p className="text-[12px] text-[#111827]/55 tracking-tight mt-[2px]"
                 style={{ fontFamily:T.mono }}>Midterm-Prep Journey</p>
             </div>
           </div>
         )}
 
-        {/* Centre: tab nav (desktop) or screen title */}
-        {!onBack ? (
-          <div className="hidden lg:flex items-center gap-1 absolute left-1/2 -translate-x-1/2">
-            {["홈","미션","성장","복습","프로필"].map((label,i)=>(
-              <button key={label}
-                onClick={() => onTab?.(i)}
-                className={`px-4 py-[7px] rounded-xl text-[13px] font-semibold transition-all ${
-                  i===activeTab ? "bg-[#EFF6FF] text-[#2563EB]" : "text-[#111827]/45 hover:text-[#111827] hover:bg-black/[0.04]"
-                }`}>
-                {label}
-              </button>
-            ))}
-          </div>
-        ) : title ? (
-          <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none">
-            <p className="text-[13px] font-bold text-[#111827]">{title}</p>
-          </div>
-        ) : null}
+        {/* Centre: tab nav (desktop) or screen title (left-aligned, flex spacer) */}
+        <div className="flex-1 min-w-0 flex items-center">
+          {!onBack ? (
+            <div className="hidden lg:flex items-center gap-1 mx-auto">
+              {["홈","미션설정","성장","복습","학습현황"].map((label,i)=>(
+                <button key={label}
+                  onClick={() => onTab?.(i)}
+                  className={`px-4 py-[7px] rounded-xl text-[13px] font-semibold transition-all ${
+                    i===activeTab ? "bg-[#EFF6FF] text-[#2563EB]" : "text-[#111827]/65 hover:text-[#111827] hover:bg-black/[0.04]"
+                  }`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          ) : title ? (
+            <p className="text-[13px] font-bold text-[#111827] truncate">{title}</p>
+          ) : null}
+        </div>
 
         {/* Right: icons */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 flex-shrink-0">
           <button onClick={onNotifications}
-            className="relative w-9 h-9 rounded-xl flex items-center justify-center text-[#111827]/38 hover:bg-black/[0.04] transition-colors">
+            className="relative w-9 h-9 rounded-xl flex items-center justify-center text-[#111827]/58 hover:bg-black/[0.04] transition-colors">
             <Bell className="w-[18px] h-[18px]"/>
             {unreadCount > 0 && (
               <span className="absolute top-1.5 right-1.5 w-[7px] h-[7px] rounded-full bg-[#F59E0B] border-2 border-white"/>
             )}
           </button>
           <button onClick={onSettings}
-            className="w-9 h-9 rounded-xl flex items-center justify-center text-[#111827]/38 hover:bg-black/[0.04] transition-colors">
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-[#111827]/58 hover:bg-black/[0.04] transition-colors">
             <Settings className="w-[18px] h-[18px]"/>
           </button>
           <button onClick={onProfile}
@@ -737,14 +744,14 @@ function Pill({ icon:Icon, iconColor, value, label, filled=false }: {
     <div className="flex items-center gap-1.5 bg-white/14 backdrop-blur-sm rounded-2xl px-3 py-2 border border-white/14">
       <Icon className="w-4 h-4 flex-shrink-0" style={{ color:iconColor }} fill={filled ? iconColor : "none"}/>
       <span className="text-white font-bold text-sm">{value}</span>
-      <span className="text-white/45 text-[11px]">{label}</span>
+      <span className="text-white/45 text-[13px]">{label}</span>
     </div>
   );
 }
 
 const NAV_ITEMS: Array<{ icon:LucideIcon; label:string }> = [
-  { icon:Home, label:"홈" }, { icon:Target, label:"미션" }, { icon:TrendingUp, label:"성장" },
-  { icon:BookOpen, label:"복습" }, { icon:User, label:"프로필" },
+  { icon:Home, label:"홈" }, { icon:Target, label:"미션설정" }, { icon:TrendingUp, label:"성장" },
+  { icon:BookOpen, label:"복습" }, { icon:User, label:"학습현황" },
 ];
 
 function BottomNav({ active, onSelect }: { active:number; onSelect:(i:number)=>void }) {
@@ -760,7 +767,7 @@ function BottomNav({ active, onSelect }: { active:number; onSelect:(i:number)=>v
               style={{ color:isActive ? T.blue : "#9CA3AF" }}>
               {isActive && <span className="absolute inset-0 rounded-2xl bg-[#2563EB]/8"/>}
               <Icon className="w-5 h-5 relative z-10"/>
-              <span className="text-[10px] font-semibold relative z-10">{label}</span>
+              <span className="text-[12px] font-semibold relative z-10">{label}</span>
             </button>
           );
         })}
@@ -795,7 +802,7 @@ function HeroSection({ completed, total, onBeginDay, exp, streak, dayIndex, tota
               <span className="text-white/60 text-[13px] font-semibold">Day {dayIndex}</span>
               <span className="text-white/25 text-[13px]">·</span>
               <span className="text-white/60 text-[13px] font-semibold">{totalDays}일 여정</span>
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold text-white/75 bg-white/15"
+              <span className="px-2.5 py-0.5 rounded-full text-[13px] font-bold text-white/75 bg-white/15"
                 style={{ fontFamily:T.mono }}>{Math.round(dayPct)}%</span>
             </div>
 
@@ -810,7 +817,7 @@ function HeroSection({ completed, total, onBeginDay, exp, streak, dayIndex, tota
 
             {/* Progress bar */}
             <div className="mb-5 max-w-[340px]">
-              <div className="flex justify-between text-[11px] text-white/45 mb-1.5"
+              <div className="flex justify-between text-[13px] text-white/45 mb-1.5"
                 style={{ fontFamily:T.mono }}>
                 <span>{totalDays}일 여정 진행률</span>
                 <span className="text-white/55 font-semibold">{dayIndex} / {totalDays}일</span>
@@ -829,11 +836,17 @@ function HeroSection({ completed, total, onBeginDay, exp, streak, dayIndex, tota
             </div>
 
             {/* CTA */}
-            <button onClick={onBeginDay}
-              className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-white text-[#2563EB] font-bold text-[14px] hover:bg-white/92 active:scale-95 transition-all"
-              style={{ boxShadow:"0 4px 20px rgba(0,0,0,0.14)" }}>
-              오늘 시작하기 <ArrowRight className="w-4 h-4"/>
-            </button>
+            {total > 0 && completed >= total ? (
+              <div className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-white/16 text-white font-bold text-[14px] border border-white/25">
+                🎉 오늘 미션 완료!
+              </div>
+            ) : (
+              <button onClick={onBeginDay}
+                className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-white text-[#2563EB] font-bold text-[14px] hover:bg-white/92 active:scale-95 transition-all"
+                style={{ boxShadow:"0 4px 20px rgba(0,0,0,0.14)" }}>
+                {completed > 0 ? "이어서 하기" : "오늘 시작하기"} <ArrowRight className="w-4 h-4"/>
+              </button>
+            )}
           </div>
 
           {/* Character — right side */}
@@ -845,8 +858,8 @@ function HeroSection({ completed, total, onBeginDay, exp, streak, dayIndex, tota
 
         {/* Motivational quote */}
         <div className="mt-5 pt-5 border-t border-white/10">
-          <p className="text-white/38 text-[11px] uppercase tracking-wider mb-1" style={{ fontFamily:T.mono }}>오늘의 한마디</p>
-          <p className="text-white/72 text-[0.9rem] italic leading-relaxed" style={{ fontFamily:T.serif }}>
+          <p className="text-white/38 text-[13px] uppercase tracking-wider mb-1" style={{ fontFamily:T.mono }}>오늘의 한마디</p>
+          <p className="text-white/72 text-[0.9rem] italic leading-relaxed" >
             "시작이 반이다. 작은 첫 걸음이 오늘을 바꾼다."
           </p>
         </div>
@@ -867,7 +880,7 @@ function SubjectCard({ subject, onStart }: { subject:Subject; onStart:()=>void }
           </div>
           <div>
             <p className="font-bold text-[#111827] text-[0.9rem] leading-tight">{subject.name}</p>
-            <p className="text-[#111827]/32 text-[11px]">{subject.sub}</p>
+            <p className="text-[#111827]/52 text-[13px]">{subject.sub}</p>
           </div>
         </div>
         {subject.done && (
@@ -876,17 +889,17 @@ function SubjectCard({ subject, onStart }: { subject:Subject; onStart:()=>void }
           </div>
         )}
       </div>
-      <p className="text-[#111827]/60 text-[0.83rem] leading-snug flex-1">{subject.goal}</p>
+      <p className="text-[#111827]/75 text-[0.83rem] leading-snug flex-1">{subject.goal}</p>
       <div className="flex items-center gap-3">
-        <div className="flex items-center gap-1 text-[#111827]/32">
-          <Clock className="w-3.5 h-3.5"/><span className="text-[11px]">{subject.time}분</span>
+        <div className="flex items-center gap-1 text-[#111827]/52">
+          <Clock className="w-3.5 h-3.5"/><span className="text-[13px]">{subject.time}분</span>
         </div>
         <div className="flex items-center gap-0.5">
           {[1,2,3].map(i => (
             <Star key={i} className="w-3 h-3" style={{ color:i<=subject.difficulty?subject.color:"#E5E7EB" }} fill={i<=subject.difficulty?subject.color:"none"}/>
           ))}
         </div>
-        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full ml-auto" style={{ backgroundColor:subject.bg, color:subject.color }}>
+        <span className="text-[12px] font-medium px-2 py-0.5 rounded-full ml-auto" style={{ backgroundColor:subject.bg, color:subject.color }}>
           {subject.difficulty===1?"쉬움":subject.difficulty===2?"보통":"어려움"}
         </span>
       </div>
@@ -909,9 +922,9 @@ function TodaysMissions({ subjects, onStart, onViewWeeklyPlan, beforeStart }: {
       <div className="flex items-end justify-between mb-4">
         <div>
           <h2 className="text-[#111827] font-bold text-[17px] tracking-tight">오늘의 미션</h2>
-          <p className="text-[#111827]/40 text-[13px] mt-0.5">
+          <p className="text-[#111827]/60 text-[13px] mt-0.5">
             {done}/{subjects.length} 완료
-            {remaining>0&&<span className="ml-2 text-[#111827]/28">· {remaining}분 남음</span>}
+            {remaining>0&&<span className="ml-2 text-[#111827]/48">· {remaining}분 남음</span>}
           </p>
         </div>
         <button onClick={onViewWeeklyPlan}
@@ -925,7 +938,7 @@ function TodaysMissions({ subjects, onStart, onViewWeeklyPlan, beforeStart }: {
           <p className="font-bold text-[#111827] mb-1">
             {beforeStart ? "내일(7/21)부터 미션이 시작돼요" : "오늘 배정된 미션이 없어요"}
           </p>
-          <p className="text-[#111827]/40 text-sm">
+          <p className="text-[#111827]/60 text-sm">
             {beforeStart ? "위 '내일 계획 미리 보기'에서 내일 할 과목을 체크해두세요." : "이번 주 계획에서 하고 싶은 과목을 체크해보세요."}
           </p>
         </div>
@@ -953,7 +966,7 @@ function GrowthSection({ onClick, exp, streak, history, dayPlans }: {
   onClick?: () => void; exp:number; streak:number; history:Record<string,string[]>; dayPlans:DayPlanOverrides;
 }) {
   const lvl     = getLevelInfo(exp);
-  const week    = getCurrentWeekStatus(history, toYMD(new Date()));
+  const week    = getCurrentWeekStatus(history, toYMD(new Date()), dayPlans);
   const badges  = getBadgeStatus({ exp, streak, history, dayPlans });
   const earned  = badges.filter(b => b.unlocked).length;
 
@@ -961,51 +974,59 @@ function GrowthSection({ onClick, exp, streak, history, dayPlans }: {
     <div onClick={onClick} role={onClick?"button":undefined} className={`${T.glassCard} rounded-3xl p-6${onClick?" cursor-pointer hover:shadow-md transition-shadow":""}`} style={{ boxShadow:T.cardShadow }}>
       <div className="flex items-center justify-between mb-5">
         <h2 className="text-[#111827] font-bold text-[0.95rem]">성장 현황</h2>
-        <div className="px-2.5 py-1 rounded-full bg-[#D1FAE5] text-[#065F46] text-[11px] font-bold">Lv.{lvl.level} {lvl.name}</div>
+        <div className="px-2.5 py-1 rounded-full bg-[#D1FAE5] text-[#065F46] text-[13px] font-bold">Lv.{lvl.level} {lvl.name}</div>
       </div>
       <div className="flex items-end gap-4 mb-2">
         <div className="w-20 h-24 flex-shrink-0"><GrowthTree className="w-full h-full"/></div>
         <div className="flex-1 min-w-0">
-          <div className="flex justify-between text-[11px] text-[#111827]/38 mb-1.5">
+          <div className="flex justify-between text-[13px] text-[#111827]/58 mb-1.5">
             <span>{lvl.xpIntoLevel.toLocaleString()} XP</span>
             <span>{lvl.isMax ? "만렙!" : `${lvl.xpForLevel.toLocaleString()} XP`}</span>
           </div>
           <div className="h-2.5 bg-[#F1F5F9] rounded-full overflow-hidden">
             <div className="h-full rounded-full" style={{ width:`${lvl.pct}%`, background:"linear-gradient(90deg,#10B981,#34D399)" }}/>
           </div>
-          <p className="text-[11px] text-[#111827]/35 mt-1.5">
+          <p className="text-[13px] text-[#111827]/55 mt-1.5">
             {lvl.isMax ? "최고 레벨을 달성했어요!" : <>Lv.{lvl.level + 1}까지 <span className="font-semibold text-[#10B981]">{lvl.xpToNext.toLocaleString()} XP</span> 남음</>}
           </p>
         </div>
       </div>
-      <p className="text-[10px] text-[#111827]/32 leading-relaxed mb-5">
+      <p className="text-[12px] text-[#111827]/52 leading-relaxed mb-5">
         미션을 완료할 때마다 XP를 받아요. XP가 쌓이면 레벨이 오르고 나무가 자라요.
       </p>
       <div className="mb-5">
-        <p className="text-[11px] font-semibold text-[#111827]/32 uppercase tracking-wider mb-3">이번 주 기록</p>
+        <p className="text-[13px] font-semibold text-[#111827]/52 uppercase tracking-wider mb-3">이번 주 기록</p>
         <div className="flex items-center justify-between">
-          {week.map((d,i)=>(
+          {week.map((d,i)=>{
+            const missed = !d.isRest && !d.isFuture && !d.isToday && !d.done && !d.partial && d.total > 0;
+            const bg = d.done ? "#10B981" : d.partial ? "#FEF3C7" : missed ? "#FEE2E2" : "#F1F5F9";
+            return (
             <div key={i} className="flex flex-col items-center gap-1.5">
-              <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${d.isToday?"border-2 border-[#2563EB]":d.done?"bg-[#10B981]":"bg-[#F1F5F9]"}`}>
-                {d.done && !d.isToday ? <Check className="w-4 h-4 text-white"/> : <span className={`text-[10px] font-bold ${d.isToday?"text-[#2563EB]":"text-[#111827]/28"}`}>{d.day}</span>}
+              <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${d.isToday?"border-2 border-[#2563EB]":""}`}
+                style={{ backgroundColor: d.isToday ? undefined : bg }}>
+                {d.done
+                  ? <Check className="w-4 h-4 text-white"/>
+                  : d.partial
+                    ? <span className="text-[11px] font-bold text-[#B45309]">{d.doneCount}/{d.total}</span>
+                    : <span className={`text-[12px] font-bold ${d.isToday?"text-[#2563EB]":missed?"text-[#DC2626]":"text-[#111827]/48"}`}>{d.day}</span>}
               </div>
-              <span className="text-[10px] text-[#111827]/28 font-medium">{d.day}</span>
+              <span className="text-[12px] text-[#111827]/48 font-medium">{d.day}</span>
             </div>
-          ))}
+          );})}
         </div>
       </div>
       <div>
         <div className="flex items-center justify-between mb-1">
-          <p className="text-[11px] font-semibold text-[#111827]/32 uppercase tracking-wider">배지 {earned}/{badges.length}</p>
+          <p className="text-[13px] font-semibold text-[#111827]/52 uppercase tracking-wider">배지 {earned}/{badges.length}</p>
         </div>
-        <p className="text-[10px] text-[#111827]/32 leading-relaxed mb-3">엄마에게 보여줄 우현이의 노력 기록이에요.</p>
+        <p className="text-[12px] text-[#111827]/52 leading-relaxed mb-3">엄마에게 보여줄 우현이의 노력 기록이에요.</p>
         <div className="grid grid-cols-4 gap-2">
           {badges.slice(0,4).map((b,i)=>(
             <div key={i} className="flex flex-col items-center gap-1.5" style={{ opacity:b.unlocked?1:0.35 }}>
               <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-[1.3rem]" style={{ backgroundColor:b.unlocked?"#D1FAE5":"#F1F5F9" }}>
                 {b.icon}
               </div>
-              <span className="text-[10px] text-[#111827]/42 text-center leading-tight">{b.label}</span>
+              <span className="text-[12px] text-[#111827]/62 text-center leading-tight">{b.label}</span>
             </div>
           ))}
         </div>
@@ -1026,10 +1047,10 @@ function HomeEncouragementCard({ onClick }: { onClick?: () => void }) {
           </div>
           <div>
             <p className="text-sm font-bold text-[#78350F]">엄마의 응원</p>
-            <p className="text-[11px] text-[#92400E]/45">오늘 7:30 AM</p>
+            <p className="text-[13px] text-[#92400E]/45">오늘 7:30 AM</p>
           </div>
         </div>
-        <p className="text-[#78350F]/82 text-[0.93rem] leading-[1.8]" style={{ fontFamily:T.serif }}>
+        <p className="text-[#78350F]/82 text-[0.93rem] leading-[1.8]" >
           "우현아, 오늘도 화이팅! 엄마는 항상 우현이 편이야. 작은 것부터 시작하면 돼. 사랑해."
         </p>
         <div className="flex items-center gap-2 mt-4">
@@ -1054,21 +1075,21 @@ function UpcomingSection({ dayPlans, onCalendar }: { dayPlans:DayPlanOverrides; 
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-[#111827] font-bold text-[14px]">다가오는 일정</h2>
         <button onClick={onCalendar} className={onCalendar?"hover:opacity-70 transition-opacity":""}>
-          <Calendar className="w-4 h-4 text-[#111827]/30"/>
+          <Calendar className="w-4 h-4 text-[#111827]/50"/>
         </button>
       </div>
       <div className="bg-[#F8FAFC] rounded-2xl p-4 mb-3 border border-[#111827]/05">
-        <p className="text-[11px] font-semibold text-[#111827]/32 uppercase tracking-wider mb-2.5">
+        <p className="text-[13px] font-semibold text-[#111827]/52 uppercase tracking-wider mb-2.5">
           {tomorrowSched?.kind === "study" ? "내일 예정" : tomorrowSched?.kind === "holiday" ? `내일은 ${tomorrowSched.label ?? "공휴일"}` : "내일은 주말"}
         </p>
         {tomorrowSubjects.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
             {tomorrowSubjects.map(s=>(
-              <span key={s} className="text-[11px] px-2.5 py-1 rounded-full bg-white border border-[#E5E7EB] text-[#111827]/62 font-semibold">{s}</span>
+              <span key={s} className="text-[13px] px-2.5 py-1 rounded-full bg-white border border-[#E5E7EB] text-[#111827]/76 font-semibold">{s}</span>
             ))}
           </div>
         ) : (
-          <p className="text-[11px] text-[#111827]/35">
+          <p className="text-[13px] text-[#111827]/55">
             {tomorrowSched?.kind === "study" ? "아직 체크된 과목이 없어요." : "쉬는 날이에요."}
           </p>
         )}
@@ -1155,13 +1176,13 @@ function TodayGoalCard({ subjects }: { subjects:Subject[] }) {
         <div className="flex items-center justify-between">
           <h3 className="font-bold text-[#111827] text-[0.95rem]">오늘 목표</h3>
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#EFF6FF]">
-            <Clock className="w-3 h-3 text-[#2563EB]"/><span className="text-[11px] font-bold text-[#2563EB]">총 {totalTime}분</span>
+            <Clock className="w-3 h-3 text-[#2563EB]"/><span className="text-[13px] font-bold text-[#2563EB]">총 {totalTime}분</span>
           </div>
         </div>
       </div>
       <div className="p-6">
         {subjects.length === 0 ? (
-          <p className="text-sm text-[#111827]/40 text-center py-4">오늘은 배정된 과목이 없어요.</p>
+          <p className="text-sm text-[#111827]/60 text-center py-4">오늘은 배정된 과목이 없어요.</p>
         ) : (
         <div className="flex flex-col sm:flex-row sm:gap-6">
           <div className="flex-1 space-y-2.5 mb-5 sm:mb-0">
@@ -1180,20 +1201,20 @@ function TodayGoalCard({ subjects }: { subjects:Subject[] }) {
           </div>
           <div className="hidden sm:block w-px bg-[#111827]/06 self-stretch"/>
           <div className="sm:w-44 flex flex-col gap-2">
-            <p className="text-[11px] font-bold text-[#111827]/35 uppercase tracking-wider mb-1">오늘의 보상</p>
+            <p className="text-[13px] font-bold text-[#111827]/55 uppercase tracking-wider mb-1">오늘의 보상</p>
             <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-[#FEF3C7] border border-[#F59E0B]/20">
               <div className="w-8 h-8 rounded-xl bg-[#F59E0B] flex items-center justify-center flex-shrink-0">
                 <Zap className="w-4 h-4 text-white" fill="white"/>
               </div>
-              <div><p className="text-[13px] font-bold text-[#92400E]">+{subjects.reduce((s,g)=>s+EXAM_SUBJECTS.find(x=>x.id===g.id)!.exp,0)} EXP</p><p className="text-[10px] text-[#92400E]/55">경험치 획득</p></div>
+              <div><p className="text-[13px] font-bold text-[#92400E]">+{subjects.reduce((s,g)=>s+EXAM_SUBJECTS.find(x=>x.id===g.id)!.exp,0)} EXP</p><p className="text-[12px] text-[#92400E]/55">경험치 획득</p></div>
             </div>
             <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-[#D1FAE5] border border-[#10B981]/20">
               <span className="text-xl leading-none flex-shrink-0">🌱</span>
-              <div><p className="text-[13px] font-bold text-[#065F46]">새잎 성장</p><p className="text-[10px] text-[#065F46]/55">나무가 자라요</p></div>
+              <div><p className="text-[13px] font-bold text-[#065F46]">새잎 성장</p><p className="text-[12px] text-[#065F46]/55">나무가 자라요</p></div>
             </div>
             <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-[#FFF1F2] border border-[#E11D48]/15">
               <span className="text-xl leading-none flex-shrink-0">❤️</span>
-              <div><p className="text-[13px] font-bold text-[#9F1239]">엄마 칭찬</p><p className="text-[10px] text-[#9F1239]/55">응원 메시지 도착</p></div>
+              <div><p className="text-[13px] font-bold text-[#9F1239]">엄마 칭찬</p><p className="text-[12px] text-[#9F1239]/55">응원 메시지 도착</p></div>
             </div>
           </div>
         </div>
@@ -1208,7 +1229,7 @@ function StudyJourney() {
     <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
       <div className="flex items-center justify-between mb-5">
         <h3 className="font-bold text-[#111827] text-[0.95rem]">오늘의 여정</h3>
-        <span className="text-[11px] font-mono text-[#111827]/30">6단계</span>
+        <span className="text-[13px] font-mono text-[#111827]/50">6단계</span>
       </div>
       <div className="hidden sm:block relative">
         <div className="absolute top-[22px] left-8 right-8 h-[2px] rounded-full"
@@ -1220,8 +1241,8 @@ function StudyJourney() {
                 style={{ borderColor:`${step.color}28`, boxShadow:`0 2px 12px ${step.color}18` }}>
                 <Icon className="w-5 h-5" style={{ color:step.color }}/>
               </div>
-              <span className="text-[9px] font-mono font-bold text-[#111827]/22">{step.num}</span>
-              <span className="text-[11px] font-bold text-center leading-tight" style={{ color:step.color }}>{step.label}</span>
+              <span className="text-[11px] font-mono font-bold text-[#111827]/42">{step.num}</span>
+              <span className="text-[13px] font-bold text-center leading-tight" style={{ color:step.color }}>{step.label}</span>
             </div>
           ); })}
         </div>
@@ -1234,16 +1255,16 @@ function StudyJourney() {
               <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor:`${step.color}20` }}>
                 <Icon className="w-[18px] h-[18px]" style={{ color:step.color }}/>
               </div>
-              <span className="text-[9px] font-mono text-[#111827]/30">{step.num}</span>
-              <span className="text-[11px] font-bold text-center leading-tight" style={{ color:step.color }}>{step.label}</span>
+              <span className="text-[11px] font-mono text-[#111827]/50">{step.num}</span>
+              <span className="text-[13px] font-bold text-center leading-tight" style={{ color:step.color }}>{step.label}</span>
             </div>
-            {i<JOURNEY_STEPS.length-1&&<ChevronRight className="w-4 h-4 flex-shrink-0 text-[#111827]/18"/>}
+            {i<JOURNEY_STEPS.length-1&&<ChevronRight className="w-4 h-4 flex-shrink-0 text-[#111827]/38"/>}
           </div>
         ); })}
       </div>
       <div className="mt-4 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-[#EFF6FF] border border-[#2563EB]/10">
         <Sun className="w-4 h-4 text-[#2563EB]/60 flex-shrink-0"/>
-        <p className="text-[11px] text-[#2563EB]/65 leading-relaxed">준비부터 완료까지 — 이 여정을 끝내면 보상이 기다려!</p>
+        <p className="text-[13px] text-[#2563EB]/65 leading-relaxed">준비부터 완료까지 — 이 여정을 끝내면 보상이 기다려!</p>
       </div>
     </div>
   );
@@ -1264,18 +1285,17 @@ function MomMessageCard() {
           </div>
           <div>
             <p className="text-sm font-bold text-[#881337]">엄마의 응원</p>
-            <p className="text-[11px] text-[#9F1239]/45">오늘 7:30 AM · 공부 시작 전</p>
+            <p className="text-[13px] text-[#9F1239]/45">오늘 7:30 AM · 공부 시작 전</p>
           </div>
         </div>
-        <blockquote className="text-[1.05rem] leading-[1.85] text-[#881337]/85"
-          style={{ fontFamily:T.serif, fontStyle:"italic" }}>
+        <blockquote className="text-[1.05rem] leading-[1.85] text-[#881337]/85">
           "우현아,<br/>오늘도 완벽하려고 하지 말고<br/>시작만 해도 성공이야."
         </blockquote>
         <div className="flex items-center gap-3 mt-5 pt-4 border-t border-[#E11D48]/08">
           <div className="flex gap-1">
             {[0,1,2].map(i=><Heart key={i} className="w-3.5 h-3.5 text-[#FB7185]" fill="#FB7185"/>)}
           </div>
-          <span className="text-[11px] text-[#9F1239]/38 ml-auto">엄마가 우현이를 위해 보낸 메시지</span>
+          <span className="text-[13px] text-[#9F1239]/38 ml-auto">엄마가 우현이를 위해 보낸 메시지</span>
         </div>
       </div>
     </div>
@@ -1303,7 +1323,7 @@ function BriefingScreen({ subjects, onStart, onBack }: { subjects:Subject[]; onS
             style={{ background:"linear-gradient(135deg,#1d4ed8,#2563EB 45%,#4f46e5)", boxShadow:"0 8px 40px rgba(37,99,235,0.38)" }}>
             공부 시작하기 <ArrowRight className="w-5 h-5"/>
           </button>
-          <button onClick={onBack} className="text-[#111827]/35 text-sm hover:text-[#111827]/60 transition-colors underline underline-offset-4">
+          <button onClick={onBack} className="text-[#111827]/55 text-sm hover:text-[#111827]/75 transition-colors underline underline-offset-4">
             오늘 계획 다시 보기
           </button>
         </div>
@@ -1315,7 +1335,7 @@ function BriefingScreen({ subjects, onStart, onBack }: { subjects:Subject[]; onS
             style={{ background:"linear-gradient(135deg,#1d4ed8,#2563EB 45%,#4f46e5)", boxShadow:"0 8px 40px rgba(37,99,235,0.38)", transform:ctaActive?"scale(0.98)":"scale(1)", transition:"transform 0.1s ease" }}>
             공부 시작하기 <ArrowRight className="w-5 h-5"/>
           </div>
-          <button onClick={onBack} className="w-full text-center text-[#111827]/35 text-sm mt-3 hover:text-[#111827]/55 transition-colors">
+          <button onClick={onBack} className="w-full text-center text-[#111827]/55 text-sm mt-3 hover:text-[#111827]/72 transition-colors">
             오늘 계획 다시 보기
           </button>
         </div>
@@ -1339,16 +1359,23 @@ function StudySubjectCard({
       onClick={onSelect}
       className="subject-card w-full text-left rounded-2xl p-5 border-2 flex flex-col gap-3 relative"
       style={{
-        backgroundColor: selected ? `${subject.color}08` : "rgba(255,255,255,0.75)",
-        borderColor: selected ? subject.color : "rgba(255,255,255,0.9)",
+        backgroundColor: subject.done ? "#F0FDF4" : selected ? `${subject.color}08` : "rgba(255,255,255,0.75)",
+        borderColor: subject.done ? "#BBF7D0" : selected ? subject.color : "rgba(255,255,255,0.9)",
+        opacity: subject.done ? 0.75 : 1,
         boxShadow: selected
           ? `0 4px 24px ${subject.color}22, 0 1px 4px rgba(17,24,39,0.06)`
           : T.cardShadow,
       }}
     >
-      {/* Recommended badge */}
-      {subject.recommended && (
-        <div className="absolute -top-2.5 left-4 flex items-center gap-1 px-2.5 py-0.5 rounded-full text-white text-[10px] font-bold"
+      {/* Recommended / Done badge */}
+      {subject.done ? (
+        <div className="absolute -top-2.5 left-4 flex items-center gap-1 px-2.5 py-0.5 rounded-full text-white text-[12px] font-bold"
+          style={{ background:T.green }}>
+          <Check className="w-2.5 h-2.5"/>
+          완료
+        </div>
+      ) : subject.recommended && (
+        <div className="absolute -top-2.5 left-4 flex items-center gap-1 px-2.5 py-0.5 rounded-full text-white text-[12px] font-bold"
           style={{ background:`linear-gradient(135deg,${T.blue},${T.indigo})` }}>
           <Star className="w-2.5 h-2.5" fill="white"/>
           추천
@@ -1362,7 +1389,11 @@ function StudySubjectCard({
           </div>
           <p className="font-bold text-[#111827] text-base">{subject.name}</p>
         </div>
-        {selected && (
+        {subject.done ? (
+          <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor:T.green }}>
+            <Check className="w-3.5 h-3.5 text-white"/>
+          </div>
+        ) : selected && (
           <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor:subject.color }}>
             <Check className="w-3.5 h-3.5 text-white"/>
           </div>
@@ -1370,9 +1401,9 @@ function StudySubjectCard({
       </div>
       {/* Stats row */}
       <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-1 text-[#111827]/45">
+        <div className="flex items-center gap-1 text-[#111827]/65">
           <Clock className="w-3.5 h-3.5"/>
-          <span className="text-[11px] font-semibold">{subject.time}분</span>
+          <span className="text-[13px] font-semibold">{subject.time}분</span>
         </div>
         <div className="flex items-center gap-0.5">
           {[1,2,3].map(i=>(
@@ -1383,11 +1414,11 @@ function StudySubjectCard({
         </div>
         <div className="flex items-center gap-1 ml-auto">
           <Zap className="w-3.5 h-3.5 text-[#F59E0B]"/>
-          <span className="text-[11px] font-bold text-[#F59E0B]">+{subject.exp} EXP</span>
+          <span className="text-[13px] font-bold text-[#F59E0B]">+{subject.exp} EXP</span>
         </div>
       </div>
       {/* Mission preview */}
-      <p className="text-[11px] text-[#111827]/42 leading-snug">{subject.mission}</p>
+      <p className="text-[13px] text-[#111827]/62 leading-snug">{subject.mission}</p>
     </button>
   );
 }
@@ -1395,13 +1426,13 @@ function StudySubjectCard({
 function SubjectSelectScreen({ subjects, onSelect, onBack }: {
   subjects:StudySubject[]; onSelect:(id:string)=>void; onBack:()=>void;
 }) {
-  const [selectedId, setSelectedId] = useState<string>(subjects[0]?.id ?? "math");
+  const [selectedId, setSelectedId] = useState<string>(subjects.find(s=>!s.done)?.id ?? subjects[0]?.id ?? "math");
   const selected = subjects.find(s=>s.id===selectedId) ?? subjects[0];
 
   if (!selected) {
     return (
       <main className="max-w-[600px] mx-auto px-4 py-16 text-center">
-        <p className="text-[#111827]/40 text-sm">오늘은 배정된 과목이 없어요. 홈에서 이번 주 계획을 확인해보세요.</p>
+        <p className="text-[#111827]/60 text-sm">오늘은 배정된 과목이 없어요. 홈에서 이번 주 계획을 확인해보세요.</p>
       </main>
     );
   }
@@ -1410,11 +1441,11 @@ function SubjectSelectScreen({ subjects, onSelect, onBack }: {
     <main className="max-w-[1100px] mx-auto px-4 sm:px-6 lg:px-10 py-6 pb-28 lg:pb-12">
       {/* Page header */}
       <div className="mb-6">
-        <p className="text-[11px] font-mono text-[#111827]/30 uppercase tracking-[0.35em] mb-2">과목 선택</p>
+        <p className="text-[13px] font-mono text-[#111827]/50 uppercase tracking-[0.35em] mb-2">과목 선택</p>
         <h1 className="text-[1.8rem] sm:text-[2.2rem] font-bold text-[#111827] tracking-tight leading-tight">
           오늘 무엇부터<br className="sm:hidden"/>시작할까?
         </h1>
-        <p className="text-[#111827]/45 mt-2 text-[0.9rem]">한 과목씩 천천히 해보자.</p>
+        <p className="text-[#111827]/65 mt-2 text-[0.9rem]">한 과목씩 천천히 해보자.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -1432,14 +1463,14 @@ function SubjectSelectScreen({ subjects, onSelect, onBack }: {
         {/* Desktop: selected detail + CTA */}
         <div className="hidden lg:flex lg:col-span-5 flex-col gap-4">
           <div className={`${T.glassCard} rounded-3xl p-6 flex-1`} style={{ boxShadow:T.cardShadow }}>
-            <p className="text-[11px] font-mono text-[#111827]/30 uppercase tracking-wider mb-4">선택한 과목</p>
+            <p className="text-[13px] font-mono text-[#111827]/50 uppercase tracking-wider mb-4">선택한 과목</p>
             <div className="flex items-center gap-3 mb-5">
               <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ backgroundColor:selected.bg }}>
                 {<selected.icon className="w-7 h-7" style={{ color:selected.color }}/>}
               </div>
               <div>
                 <p className="text-xl font-bold text-[#111827]">{selected.name}</p>
-                <p className="text-sm text-[#111827]/40">{selected.mission}</p>
+                <p className="text-sm text-[#111827]/60">{selected.mission}</p>
               </div>
             </div>
             {[
@@ -1448,13 +1479,13 @@ function SubjectSelectScreen({ subjects, onSelect, onBack }: {
             ].map(({ label, value, icon:Icon, color })=>(
               <div key={label} className="flex items-center justify-between py-3 border-b border-[#111827]/06 last:border-0">
                 <div className="flex items-center gap-2">
-                  <Icon className="w-4 h-4" style={{ color }}/><span className="text-sm text-[#111827]/55">{label}</span>
+                  <Icon className="w-4 h-4" style={{ color }}/><span className="text-sm text-[#111827]/72">{label}</span>
                 </div>
                 <span className="text-sm font-bold text-[#111827]">{value}</span>
               </div>
             ))}
             <div className="flex items-center justify-between py-3">
-              <span className="text-sm text-[#111827]/55">난이도</span>
+              <span className="text-sm text-[#111827]/72">난이도</span>
               <div className="flex gap-0.5">
                 {[1,2,3].map(i=>(
                   <Star key={i} className="w-4 h-4"
@@ -1526,7 +1557,7 @@ function MissionDetailScreen({ subjectId, missionText, onStart, onBack }: {
 
       {/* Reward breakdown */}
       <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
-        <p className="text-[11px] font-bold text-[#111827]/32 uppercase tracking-wider mb-4">완료하면 받는 보상</p>
+        <p className="text-[13px] font-bold text-[#111827]/52 uppercase tracking-wider mb-4">완료하면 받는 보상</p>
         <div className="space-y-3">
           {[
             { label:`+${subject.exp} EXP 획득`, sub:"경험치가 쌓여요", bg:"#FEF3C7", icon:Zap, color:T.amber },
@@ -1540,7 +1571,7 @@ function MissionDetailScreen({ subjectId, missionText, onStart, onBack }: {
               </div>
               <div>
                 <p className="text-sm font-bold text-[#111827]">{label}</p>
-                <p className="text-[11px] text-[#111827]/45 mt-0.5">{sub}</p>
+                <p className="text-[13px] text-[#111827]/65 mt-0.5">{sub}</p>
               </div>
             </div>
           ))}
@@ -1550,7 +1581,7 @@ function MissionDetailScreen({ subjectId, missionText, onStart, onBack }: {
       {/* Mascot encouragement */}
       <div className="flex items-center gap-4 px-4 py-4 rounded-2xl bg-white/60 border border-white/80">
         <SeedCharacter className="w-16 h-auto flex-shrink-0"/>
-        <p className="text-[0.9rem] text-[#111827]/65 leading-relaxed" style={{ fontFamily:T.serif, fontStyle:"italic" }}>
+        <p className="text-[0.9rem] text-[#111827]/78 leading-relaxed">
           "할 수 있어! 오늘도 우현이랑 같이 해보자."
         </p>
       </div>
@@ -1576,8 +1607,8 @@ function MissionDetailScreen({ subjectId, missionText, onStart, onBack }: {
 
 // ── Screen 3: 집중하기 ────────────────────────────────────────────────────────
 
-function FocusScreen({ subjectId, missionText, onComplete, onBack }: {
-  subjectId:string; missionText:string; onComplete:()=>void; onBack:()=>void;
+function FocusScreen({ subjectId, missionText, onComplete, onBack, goalScore }: {
+  subjectId:string; missionText:string; onComplete:()=>void; onBack:()=>void; goalScore?:number;
 }) {
   const subject  = EXAM_SUBJECTS.find(s=>s.id===subjectId) ?? EXAM_SUBJECTS[0];
   const TOTAL    = subject.time * 60;
@@ -1602,13 +1633,34 @@ function FocusScreen({ subjectId, missionText, onComplete, onBack }: {
   return (
     <main className="max-w-[520px] mx-auto px-4 sm:px-6 py-6 pb-12 flex flex-col min-h-[calc(100vh-64px)]">
       {/* Subject label */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl" style={{ backgroundColor:subject.bg }}>
           <Icon className="w-4 h-4" style={{ color:subject.color }}/>
           <span className="text-sm font-bold" style={{ color:subject.color }}>{subject.name}</span>
         </div>
-        <div className="text-sm font-mono text-[#111827]/35">집중 중 🎯</div>
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full" style={{ backgroundColor:running ? "#DCFCE7" : "#F1F5F9" }}>
+          <span className={`w-2 h-2 rounded-full ${running ? "pulse-dot" : ""}`} style={{ backgroundColor: running ? "#16A34A" : "#94A3B8" }}/>
+          <span className="text-sm font-bold" style={{ color: running ? "#16A34A" : "#64748B" }}>
+            {running ? "집중 중 🎯" : "일시정지"}
+          </span>
+        </div>
       </div>
+
+      {/* 기말고사 점수 → 목표점수 */}
+      {typeof goalScore === "number" && (
+        <div className="flex items-center justify-center gap-3 mb-6 py-3 px-4 rounded-2xl"
+          style={{ background:`linear-gradient(135deg,${subject.bg},white)`, border:`1.5px solid ${subject.color}30` }}>
+          <div className="text-center">
+            <p className="text-[12px] font-bold text-[#111827]/60 mb-0.5">기말고사</p>
+            <p className="text-xl font-extrabold text-[#111827]/70">{subject.examScore}점</p>
+          </div>
+          <ArrowRight className="w-5 h-5 flex-shrink-0" style={{ color:subject.color }}/>
+          <div className="text-center">
+            <p className="text-[12px] font-bold mb-0.5" style={{ color:subject.color }}>중간고사 목표</p>
+            <p className="text-2xl font-extrabold" style={{ color:subject.color }}>{goalScore}점</p>
+          </div>
+        </div>
+      )}
 
       {/* Timer — hero */}
       <div className="flex-1 flex flex-col items-center justify-center gap-6">
@@ -1639,13 +1691,13 @@ function FocusScreen({ subjectId, missionText, onComplete, onBack }: {
             <span className="text-[3rem] font-bold font-mono text-[#111827] tabular-nums leading-none">
               {mm}:{ss}
             </span>
-            <span className="text-[11px] text-[#111827]/35 font-mono mt-1">남은 시간</span>
+            <span className="text-[13px] text-[#111827]/55 font-mono mt-1">남은 시간</span>
           </div>
         </div>
 
         {/* Mission label */}
         <div className="text-center">
-          <p className="text-[11px] font-mono text-[#111827]/30 uppercase tracking-wider mb-1">현재 미션</p>
+          <p className="text-[13px] font-mono text-[#111827]/50 uppercase tracking-wider mb-1">현재 미션</p>
           <p className="text-lg font-bold text-[#111827] tracking-tight">{missionText}</p>
         </div>
 
@@ -1664,7 +1716,7 @@ function FocusScreen({ subjectId, missionText, onComplete, onBack }: {
         <div className="flex items-center gap-4">
           <SeedCharacter className="w-16 h-auto float-soft flex-shrink-0"/>
           <div className="bg-white/70 rounded-2xl px-4 py-2.5 border border-white/80 relative" style={{ boxShadow:T.cardShadow }}>
-            <p className="text-sm text-[#111827]/65 font-medium">우현이 잘하고 있어! 조금만 더!</p>
+            <p className="text-sm text-[#111827]/78 font-medium">우현이 잘하고 있어! 조금만 더!</p>
             <div className="absolute -left-[7px] top-1/2 -translate-y-1/2 w-3 h-3 bg-white rotate-45 border-l border-b border-white/80"/>
           </div>
         </div>
@@ -1672,7 +1724,7 @@ function FocusScreen({ subjectId, missionText, onComplete, onBack }: {
         {/* Control buttons */}
         <div className="flex items-center gap-3 w-full">
           <button onClick={()=>setRunning(r=>!r)}
-            className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm border-2 border-[#E5E7EB] text-[#111827]/60 hover:border-[#111827]/20 hover:text-[#111827] transition-all">
+            className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm border-2 border-[#E5E7EB] text-[#111827]/75 hover:border-[#111827]/20 hover:text-[#111827] transition-all">
             {running ? <><Pause className="w-4 h-4"/> 일시정지</> : <><Play className="w-4 h-4" fill="currentColor"/> 재개</>}
           </button>
           <button onClick={onComplete}
@@ -1695,17 +1747,34 @@ function PhotoScreen({ subjectId, missionText, onSubmit, onBack }: {
 }) {
   const subject              = EXAM_SUBJECTS.find(s=>s.id===subjectId) ?? EXAM_SUBJECTS[0];
   const [ps, setPs]          = useState<PhotoState>("camera");
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleCapture = () => setPs("preview");
+  const handleCapture = () => fileInputRef.current?.click();
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (photoUrl) URL.revokeObjectURL(photoUrl);
+    setPhotoUrl(URL.createObjectURL(file));
+    setPs("preview");
+    e.target.value = "";
+  };
   const handleSubmit  = () => {
     setPs("checking");
     setTimeout(()=>setPs("verified"), 2200);
     setTimeout(()=>onSubmit(), 3200);
   };
-  const handleRetake = () => setPs("camera");
+  const handleRetake = () => {
+    if (photoUrl) URL.revokeObjectURL(photoUrl);
+    setPhotoUrl(null);
+    setPs("camera");
+  };
+  useEffect(() => () => { if (photoUrl) URL.revokeObjectURL(photoUrl); }, [photoUrl]);
 
   return (
     <main className="max-w-[560px] mx-auto px-4 sm:px-6 py-6 pb-12 space-y-5">
+      <input ref={fileInputRef} type="file" accept="image/*" capture="environment"
+        className="hidden" onChange={handleFileChange}/>
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background:`linear-gradient(135deg,${T.green},${T.emerald})` }}>
@@ -1713,7 +1782,7 @@ function PhotoScreen({ subjectId, missionText, onSubmit, onBack }: {
         </div>
         <div>
           <h2 className="text-xl font-bold text-[#111827] tracking-tight">공부 완료!</h2>
-          <p className="text-sm text-[#111827]/45">{subject.name} · {missionText}</p>
+          <p className="text-sm text-[#111827]/65">{subject.name} · {missionText}</p>
         </div>
       </div>
 
@@ -1743,13 +1812,16 @@ function PhotoScreen({ subjectId, missionText, onSubmit, onBack }: {
         )}
 
         {(ps === "preview" || ps === "checking" || ps === "verified") && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-8">
-            {/* Simulated workbook photo */}
-            <div className="w-full h-full rounded-2xl bg-[#F8F9FA] flex flex-col items-center justify-center gap-2 border border-white/20">
-              <BookOpen className="w-12 h-12 text-[#94A3B8]"/>
-              <p className="text-[#64748B] text-sm font-medium">{subject.name} 교재</p>
-              <p className="text-[#94A3B8] text-xs">{missionText}</p>
-            </div>
+          <div className="absolute inset-0">
+            {photoUrl
+              ? <img src={photoUrl} alt="찍은 교재 사진" className="w-full h-full object-cover"/>
+              : (
+                <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-[#F8F9FA]">
+                  <BookOpen className="w-12 h-12 text-[#94A3B8]"/>
+                  <p className="text-[#64748B] text-sm font-medium">{subject.name} 교재</p>
+                  <p className="text-[#94A3B8] text-xs">{missionText}</p>
+                </div>
+              )}
           </div>
         )}
 
@@ -1776,8 +1848,8 @@ function PhotoScreen({ subjectId, missionText, onSubmit, onBack }: {
       {/* AI status bar */}
       <div className={`${T.glassCard} rounded-2xl p-4`} style={{ boxShadow:T.cardShadow }}>
         <div className="flex items-center gap-3">
-          {ps === "camera" && <><Camera className="w-5 h-5 text-[#111827]/30"/><p className="text-sm text-[#111827]/45">교재 사진을 찍어주세요</p></>}
-          {ps === "preview" && <><CheckCircle2 className="w-5 h-5 text-[#111827]/40"/><p className="text-sm text-[#111827]/55">사진이 준비됐어요. 제출하거나 다시 찍어주세요.</p></>}
+          {ps === "camera" && <><Camera className="w-5 h-5 text-[#111827]/50"/><p className="text-sm text-[#111827]/65">교재 사진을 찍어주세요</p></>}
+          {ps === "preview" && <><CheckCircle2 className="w-5 h-5 text-[#111827]/60"/><p className="text-sm text-[#111827]/72">사진이 준비됐어요. 제출하거나 다시 찍어주세요.</p></>}
           {ps === "checking" && <><Loader2 className="w-5 h-5 text-[#2563EB] spin-slow"/><p className="text-sm text-[#2563EB] font-medium">AI 분석 중...</p></>}
           {ps === "verified" && <><CheckCircle2 className="w-5 h-5 text-[#10B981]"/><p className="text-sm text-[#10B981] font-semibold">공부 내용이 확인됐어요. 잘했어요!</p></>}
         </div>
@@ -1795,7 +1867,7 @@ function PhotoScreen({ subjectId, missionText, onSubmit, onBack }: {
       {ps === "preview" && (
         <div className="flex gap-3">
           <button onClick={handleRetake}
-            className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm border-2 border-[#E5E7EB] text-[#111827]/55 hover:border-[#111827]/20 transition-all">
+            className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm border-2 border-[#E5E7EB] text-[#111827]/72 hover:border-[#111827]/20 transition-all">
             <RefreshCw className="w-4 h-4"/> 다시 찍기
           </button>
           <button onClick={handleSubmit}
@@ -1865,7 +1937,7 @@ function RewardScreen({ subjectId, missionText, onNext, onFinish, exp }: {
 
         {/* Rewards */}
         <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
-          <p className="text-[11px] font-bold text-[#111827]/32 uppercase tracking-wider mb-4">획득한 보상</p>
+          <p className="text-[13px] font-bold text-[#111827]/52 uppercase tracking-wider mb-4">획득한 보상</p>
           <div className="space-y-3">
             <div className="leaf-grow flex items-center gap-3 p-4 rounded-2xl bg-[#D1FAE5] border border-[#10B981]/15">
               <div className="w-10 h-10 rounded-xl bg-[#10B981] flex items-center justify-center flex-shrink-0">
@@ -1873,7 +1945,7 @@ function RewardScreen({ subjectId, missionText, onNext, onFinish, exp }: {
               </div>
               <div>
                 <p className="font-bold text-[#065F46]">새잎 생성</p>
-                <p className="text-[11px] text-[#065F46]/60 mt-0.5">나무에 새잎이 생겨났어요</p>
+                <p className="text-[13px] text-[#065F46]/60 mt-0.5">나무에 새잎이 생겨났어요</p>
               </div>
               <span className="ml-auto text-xl">🌱</span>
             </div>
@@ -1883,7 +1955,7 @@ function RewardScreen({ subjectId, missionText, onNext, onFinish, exp }: {
               </div>
               <div>
                 <p className="font-bold text-[#1E40AF]">경험치 +{subject.exp}</p>
-                <p className="text-[11px] text-[#1E40AF]/60 mt-0.5">다음 레벨까지 한 걸음 더!</p>
+                <p className="text-[13px] text-[#1E40AF]/60 mt-0.5">다음 레벨까지 한 걸음 더!</p>
               </div>
               <span className="ml-auto text-sm font-bold text-[#2563EB]">{exp.toLocaleString()} XP</span>
             </div>
@@ -1899,8 +1971,7 @@ function RewardScreen({ subjectId, missionText, onNext, onFinish, exp }: {
               <Heart className="w-5 h-5 text-[#E11D48]" fill="#E11D48"/>
               <p className="text-sm font-bold text-[#881337]">엄마의 메시지</p>
             </div>
-            <blockquote className="text-[1.05rem] leading-[1.8] text-[#881337]/85"
-              style={{ fontFamily:T.serif, fontStyle:"italic" }}>
+            <blockquote className="text-[1.05rem] leading-[1.8] text-[#881337]/85">
               "우현아 정말 잘했어!<br/>엄마가 너무 자랑스러워."
             </blockquote>
           </div>
@@ -1914,7 +1985,7 @@ function RewardScreen({ subjectId, missionText, onNext, onFinish, exp }: {
             다음 과목 하기 <ArrowRight className="w-5 h-5"/>
           </button>
           <button onClick={onFinish}
-            className="w-full flex items-center justify-center py-3.5 rounded-2xl font-bold text-sm text-[#111827]/55 border-2 border-[#E5E7EB] hover:border-[#111827]/20 hover:text-[#111827] transition-all">
+            className="w-full flex items-center justify-center py-3.5 rounded-2xl font-bold text-sm text-[#111827]/72 border-2 border-[#E5E7EB] hover:border-[#111827]/20 hover:text-[#111827] transition-all">
             오늘 마무리
           </button>
         </div>
@@ -1977,7 +2048,7 @@ function CelebrationSummaryCard({ todayXP, streak, exp }: { todayXP:number; stre
                 </div>
                 <div>
                   <p className="text-white font-bold text-sm leading-none">+{todayXP} XP</p>
-                  <p className="text-white/42 text-[10px] mt-0.5">오늘 획득</p>
+                  <p className="text-white/42 text-[12px] mt-0.5">오늘 획득</p>
                 </div>
               </div>
               {/* Streak */}
@@ -1987,7 +2058,7 @@ function CelebrationSummaryCard({ todayXP, streak, exp }: { todayXP:number; stre
                 </div>
                 <div>
                   <p className="text-white font-bold text-sm leading-none">{streak}일 연속</p>
-                  <p className="text-white/42 text-[10px] mt-0.5">연속 기록</p>
+                  <p className="text-white/42 text-[12px] mt-0.5">연속 기록</p>
                 </div>
               </div>
               {/* Level */}
@@ -1997,7 +2068,7 @@ function CelebrationSummaryCard({ todayXP, streak, exp }: { todayXP:number; stre
                 </div>
                 <div>
                   <p className="text-white font-bold text-sm leading-none">Lv.{lvl.level}</p>
-                  <p className="text-white/42 text-[10px] mt-0.5">{lvl.name}</p>
+                  <p className="text-white/42 text-[12px] mt-0.5">{lvl.name}</p>
                 </div>
               </div>
             </div>
@@ -2032,7 +2103,7 @@ function EmotionCheck({
   return (
     <div className="bg-white/80 backdrop-blur-xl border border-white/90 rounded-3xl p-6"
       style={{ boxShadow:T.cardShadow }}>
-      <p className="text-[11px] font-mono text-[#111827]/28 uppercase tracking-[0.35em] mb-2">감정 체크</p>
+      <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">감정 체크</p>
       <h3 className="text-[1.05rem] font-bold text-[#111827] mb-5">오늘 기분은 어땠어?</h3>
 
       <div className="flex items-stretch gap-2">
@@ -2050,7 +2121,7 @@ function EmotionCheck({
                 transform:       isSelected ? "scale(1.06)" : "scale(1)",
               }}>
               <span className="text-[1.8rem] leading-none">{e.emoji}</span>
-              <span className="text-[10px] font-bold leading-tight text-center"
+              <span className="text-[12px] font-bold leading-tight text-center"
                 style={{ color: isSelected ? e.color : "#111827", opacity: isSelected ? 1 : 0.38 }}>
                 {e.label}
               </span>
@@ -2084,7 +2155,7 @@ function HardSubjectPicker({
   return (
     <div className="bg-white/80 backdrop-blur-xl border border-white/90 rounded-3xl p-6"
       style={{ boxShadow:T.cardShadow }}>
-      <p className="text-[11px] font-mono text-[#111827]/28 uppercase tracking-[0.35em] mb-2">오늘의 돌아보기</p>
+      <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">오늘의 돌아보기</p>
       <h3 className="text-[1.05rem] font-bold text-[#111827] mb-5">오늘 가장 어려웠던 과목은?</h3>
 
       <div className="flex flex-wrap gap-2.5">
@@ -2108,7 +2179,7 @@ function HardSubjectPicker({
 
       {selected && (
         <div className="mt-4 fade-in-up">
-          <p className="text-[12px] text-[#111827]/42 leading-relaxed px-1">
+          <p className="text-[12px] text-[#111827]/62 leading-relaxed px-1">
             <span className="font-semibold" style={{ color:CHIP_COLORS[selected].color }}>{selected}</span>
             {" "}가 어려웠구나. 내일 다시 도전해보자!
           </p>
@@ -2126,13 +2197,13 @@ function JournalCard({
   return (
     <div className="bg-white/80 backdrop-blur-xl border border-white/90 rounded-3xl p-6"
       style={{ boxShadow:T.cardShadow }}>
-      <p className="text-[11px] font-mono text-[#111827]/28 uppercase tracking-[0.35em] mb-2">오늘의 일기</p>
+      <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">오늘의 일기</p>
       <h3 className="text-[1.05rem] font-bold text-[#111827] mb-4">오늘 나에게 한마디</h3>
 
       <div className="relative">
         {/* Decorative quote marks */}
         <div className="absolute top-3 left-4 text-4xl leading-none text-[#111827]/06 select-none pointer-events-none"
-          style={{ fontFamily:T.serif }} aria-hidden="true">
+           aria-hidden="true">
           "
         </div>
         <textarea
@@ -2141,20 +2212,20 @@ function JournalCard({
           placeholder="오늘 가장 기억에 남는 일을 적어보자."
           maxLength={200}
           className="textarea-styled w-full rounded-2xl px-5 pt-8 pb-4 text-[#111827] text-sm leading-[1.75] resize-none"
-          style={{ minHeight:132, fontFamily:T.serif }}
+          style={{ minHeight:132 }}
         />
         {/* Closing quote */}
         <div className="absolute bottom-4 right-4 text-4xl leading-none text-[#111827]/06 select-none pointer-events-none"
-          style={{ fontFamily:T.serif }} aria-hidden="true">
+           aria-hidden="true">
           "
         </div>
       </div>
 
       <div className="flex items-center justify-between mt-2.5 px-1">
-        <p className="text-[11px] text-[#111827]/28">
+        <p className="text-[13px] text-[#111827]/48">
           {value.length === 0 ? "자유롭게 적어보세요." : `${value.length}자 입력 중`}
         </p>
-        <span className="text-[11px] font-mono text-[#111827]/25">{value.length} / 200</span>
+        <span className="text-[13px] font-mono text-[#111827]/45">{value.length} / 200</span>
       </div>
     </div>
   );
@@ -2191,13 +2262,12 @@ function ReflectionMomCard() {
           </div>
           <div>
             <p className="text-sm font-bold text-[#881337]">엄마의 메시지</p>
-            <p className="text-[11px] text-[#9F1239]/45">오늘 공부 끝나고 도착했어요</p>
+            <p className="text-[13px] text-[#9F1239]/45">오늘 공부 끝나고 도착했어요</p>
           </div>
         </div>
 
         {/* Quote */}
-        <blockquote className="text-[1.1rem] md:text-[1.18rem] leading-[1.9] text-[#881337]/82"
-          style={{ fontFamily:T.serif, fontStyle:"italic" }}>
+        <blockquote className="text-[1.1rem] md:text-[1.18rem] leading-[1.9] text-[#881337]/82">
           "우현아.
           <br/>오늘도 끝까지 해낸 너가 정말 자랑스러워.
           <br/>결과보다 끝낸 것이 더 중요해."
@@ -2208,7 +2278,7 @@ function ReflectionMomCard() {
           <div className="flex gap-1">
             {[0,1,2].map(i => <Heart key={i} className="w-4 h-4 text-[#FB7185]" fill="#FB7185"/>)}
           </div>
-          <span className="text-[11px] text-[#9F1239]/35 ml-auto font-medium">엄마가 우현이에게</span>
+          <span className="text-[13px] text-[#9F1239]/35 ml-auto font-medium">엄마가 우현이에게</span>
         </div>
       </div>
     </div>
@@ -2225,12 +2295,12 @@ function TomorrowPreviewCard() {
       {/* Header */}
       <div className="flex items-start justify-between mb-5">
         <div>
-          <p className="text-[11px] font-mono text-[#111827]/28 uppercase tracking-[0.35em] mb-1.5">내일을 미리 보기</p>
+          <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-1.5">내일을 미리 보기</p>
           <h3 className="text-[1.05rem] font-bold text-[#111827]">내일의 미리보기</h3>
         </div>
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#EFF6FF] border border-[#2563EB]/12">
           <div className="w-1.5 h-1.5 rounded-full bg-[#2563EB]"/>
-          <span className="text-[11px] font-bold text-[#2563EB]">Day 19</span>
+          <span className="text-[13px] font-bold text-[#2563EB]">Day 19</span>
         </div>
       </div>
 
@@ -2256,7 +2326,7 @@ function TomorrowPreviewCard() {
           </div>
           <div>
             <p className="text-base font-bold text-[#111827]">45분</p>
-            <p className="text-[10px] text-[#111827]/40">예상 공부시간</p>
+            <p className="text-[12px] text-[#111827]/60">예상 공부시간</p>
           </div>
         </div>
         <div className="flex items-center gap-3 p-4 rounded-2xl bg-[#FEF3C7] border border-[#F59E0B]/15">
@@ -2265,7 +2335,7 @@ function TomorrowPreviewCard() {
           </div>
           <div>
             <p className="text-base font-bold text-[#92400E]">+140 XP</p>
-            <p className="text-[10px] text-[#92400E]/50">내일 보상</p>
+            <p className="text-[12px] text-[#92400E]/50">내일 보상</p>
           </div>
         </div>
       </div>
@@ -2387,7 +2457,7 @@ function DRCelebrationCard() {
         <div className="flex items-center gap-4 mb-5">
           <SeedCharacterCelebrating className="w-[76px] h-auto drop-shadow-xl float-soft flex-shrink-0"/>
           <div>
-            <p className="text-white/50 text-[11px] font-semibold uppercase tracking-wider mb-1">오늘의 성과</p>
+            <p className="text-white/50 text-[13px] font-semibold uppercase tracking-wider mb-1">오늘의 성과</p>
             <p className="text-[1.15rem] font-bold text-white leading-tight tracking-tight">
               오늘도 잘했어 우현!
             </p>
@@ -2405,7 +2475,7 @@ function DRCelebrationCard() {
               </div>
               <div>
                 <p className="text-white font-bold text-[0.88rem] leading-none">{value}</p>
-                <p className="text-white/42 text-[10px] mt-0.5">{label}</p>
+                <p className="text-white/42 text-[12px] mt-0.5">{label}</p>
               </div>
             </div>
           ))}
@@ -2446,7 +2516,7 @@ function DREmotionCheck({
 
   return (
     <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
-      <p className="text-[11px] font-mono text-[#111827]/28 uppercase tracking-[0.35em] mb-2">감정 체크</p>
+      <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">감정 체크</p>
       <h3 className="font-bold text-[#111827] text-[1.02rem] mb-5">오늘 기분은 어땠나요?</h3>
 
       {/* Emoji row */}
@@ -2465,7 +2535,7 @@ function DREmotionCheck({
                 transform:       isSelected && animIdx !== i ? "scale(1.05)" : "scale(1)",
               }}>
               <span className="text-[2rem] leading-none">{e.emoji}</span>
-              <span className="text-[10px] font-bold leading-tight text-center"
+              <span className="text-[12px] font-bold leading-tight text-center"
                 style={{ color: isSelected ? e.color : "rgba(17,24,39,0.32)" }}>
                 {e.label}
               </span>
@@ -2496,11 +2566,11 @@ function DRSubjectChips({
   const SUBJECTS = ["수학","영어","과학","역사","도덕"];
   return (
     <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
-      <p className="text-[11px] font-mono text-[#111827]/28 uppercase tracking-[0.35em] mb-2">오늘의 돌아보기</p>
+      <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">오늘의 돌아보기</p>
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-bold text-[#111827] text-[1.02rem]">오늘 가장 어려웠던 과목</h3>
         {selected.size > 0 && (
-          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full fade-in-up"
+          <span className="text-[13px] font-bold px-2.5 py-1 rounded-full fade-in-up"
             style={{ backgroundColor:`${T.blue}14`, color:T.blue }}>
             {selected.size}개 선택
           </span>
@@ -2526,7 +2596,7 @@ function DRSubjectChips({
         })}
       </div>
 
-      <p className="mt-3 text-[11px] text-[#111827]/28">복수 선택 가능해요</p>
+      <p className="mt-3 text-[13px] text-[#111827]/48">복수 선택 가능해요</p>
     </div>
   );
 }
@@ -2543,10 +2613,10 @@ function DRProgressBar() {
       style={{ boxShadow:"0 2px 14px rgba(17,24,39,0.05)" }}
     >
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[11px] font-semibold text-[#111827]/38 uppercase tracking-wider">
+        <span className="text-[13px] font-semibold text-[#111827]/58 uppercase tracking-wider">
           42일 프로젝트
         </span>
-        <span className="text-[11px] font-bold font-mono" style={{ color:T.blue }}>
+        <span className="text-[13px] font-bold font-mono" style={{ color:T.blue }}>
           Day {day} / {total}
         </span>
       </div>
@@ -2560,7 +2630,7 @@ function DRProgressBar() {
           }}
         />
       </div>
-      <p className="text-[10px] text-[#111827]/25 mt-1.5 text-right font-mono">
+      <p className="text-[12px] text-[#111827]/45 mt-1.5 text-right font-mono">
         {Math.round(pct)}% 완료
       </p>
     </div>
@@ -2587,7 +2657,7 @@ function DRReflectionCards({
 
   return (
     <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
-      <p className="text-[11px] font-mono text-[#111827]/28 uppercase tracking-[0.35em] mb-2">빠른 회고</p>
+      <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">빠른 회고</p>
       <h3 className="font-bold text-[#111827] text-[1.02rem] mb-4">오늘을 돌아봐요</h3>
 
       <div className="space-y-2.5">
@@ -2631,7 +2701,7 @@ function DRReflectionCards({
                   {title}
                 </p>
                 <span
-                  className="text-[11px] flex-shrink-0 font-semibold"
+                  className="text-[13px] flex-shrink-0 font-semibold"
                   style={{ color: hasValue ? T.green : "rgba(17,24,39,0.28)" }}
                 >
                   {hasValue ? "✓" : isActive ? "닫기" : "작성하기"}
@@ -2652,14 +2722,14 @@ function DRReflectionCards({
                     onClick={e => e.stopPropagation()}
                   />
                   <div className="flex justify-end mt-1">
-                    <span className="text-[10px] font-mono text-[#111827]/22">{values[i].length} / 100</span>
+                    <span className="text-[12px] font-mono text-[#111827]/42">{values[i].length} / 100</span>
                   </div>
                 </div>
               </div>
 
               {/* Collapsed value preview */}
               {!isActive && hasValue && (
-                <p className="px-4 pb-3.5 text-[0.875rem] text-[#111827]/50 -mt-0.5 leading-snug">
+                <p className="px-4 pb-3.5 text-[0.875rem] text-[#111827]/70 -mt-0.5 leading-snug">
                   {values[i]}
                 </p>
               )}
@@ -2702,14 +2772,13 @@ function DRMomCard() {
           </div>
           <div>
             <p className="text-sm font-bold text-[#881337]">엄마의 응원 ❤️</p>
-            <p className="text-[11px] text-[#9F1239]/42">공부 끝나고 도착한 메시지</p>
+            <p className="text-[13px] text-[#9F1239]/42">공부 끝나고 도착한 메시지</p>
           </div>
         </div>
 
         {/* Message */}
         <blockquote
-          className="text-[1.05rem] leading-[1.9] text-[#881337]/84"
-          style={{ fontFamily:T.serif, fontStyle:"italic" }}>
+          className="text-[1.05rem] leading-[1.9] text-[#881337]/84">
           "우현아,
           <br/>오늘도 끝까지 해낸 것이 정말 멋졌어.
           <br/>결과보다 끝까지 한 것이 더 중요해."
@@ -2720,7 +2789,7 @@ function DRMomCard() {
           <div className="flex gap-1">
             {[0,1,2].map(i=><Heart key={i} className="w-3.5 h-3.5 text-[#FB7185]" fill="#FB7185"/>)}
           </div>
-          <span className="ml-auto text-[11px] text-[#9F1239]/35">엄마가 우현이를 위해</span>
+          <span className="ml-auto text-[13px] text-[#9F1239]/35">엄마가 우현이를 위해</span>
         </div>
       </div>
     </div>
@@ -2768,7 +2837,7 @@ function DROdayGrowthCard() {
             {/* Text */}
             <div>
               <p className="font-bold text-[#111827] text-sm leading-tight">{text}</p>
-              <p className="text-[10px] text-[#111827]/45 mt-0.5">{sub}</p>
+              <p className="text-[12px] text-[#111827]/65 mt-0.5">{sub}</p>
             </div>
           </div>
         ))}
@@ -2809,7 +2878,7 @@ function DailyReviewScreen({ onFinish }: { onFinish:()=>void }) {
       >
         {/* Page subtitle */}
         <div className="text-center pt-1 pb-1">
-          <p className="text-[0.875rem] font-semibold text-[#111827]/42 leading-snug">
+          <p className="text-[0.875rem] font-semibold text-[#111827]/62 leading-snug">
             오늘도 한 걸음 성장했어요 🌱
           </p>
         </div>
@@ -2847,7 +2916,7 @@ function DailyReviewScreen({ onFinish }: { onFinish:()=>void }) {
             }}
           >
             {/* Small motivational text above button */}
-            <p className="text-center text-[12px] font-semibold text-[#111827]/38 mb-3 tracking-wide">
+            <p className="text-center text-[12px] font-semibold text-[#111827]/58 mb-3 tracking-wide">
               내일도 함께 성장해요 🌱
             </p>
 
@@ -3014,10 +3083,10 @@ function TEHeroCard() {
         <div className="bg-white/65 backdrop-blur-sm rounded-2xl px-5 py-4 border border-white/80"
           style={{ boxShadow:"0 2px 12px rgba(17,24,39,0.05)" }}>
           <div className="flex items-center justify-between mb-2.5">
-            <span className="text-[11px] font-semibold text-[#111827]/42 uppercase tracking-wider">
+            <span className="text-[13px] font-semibold text-[#111827]/62 uppercase tracking-wider">
               경험치 (XP)
             </span>
-            <span className="text-[11px] font-bold font-mono text-[#2563EB]">860 / 1000</span>
+            <span className="text-[13px] font-bold font-mono text-[#2563EB]">860 / 1000</span>
           </div>
 
           {/* Animated bar */}
@@ -3031,9 +3100,9 @@ function TEHeroCard() {
           </div>
 
           <div className="flex items-center justify-between mt-2">
-            <span className="text-[10px] text-[#111827]/28 font-mono">Lv.4</span>
-            <span className="text-[11px] font-bold text-[#111827]/50">{xpPct}%</span>
-            <span className="text-[10px] text-[#111827]/28 font-mono">Lv.5</span>
+            <span className="text-[12px] text-[#111827]/48 font-mono">Lv.4</span>
+            <span className="text-[13px] font-bold text-[#111827]/70">{xpPct}%</span>
+            <span className="text-[12px] text-[#111827]/48 font-mono">Lv.5</span>
           </div>
         </div>
       </div>
@@ -3046,7 +3115,7 @@ function TEHeroCard() {
 function TEGrowthTimeline() {
   return (
     <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
-      <p className="text-[11px] font-mono text-[#111827]/28 uppercase tracking-[0.35em] mb-2">성장 단계</p>
+      <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">성장 단계</p>
       <h3 className="font-bold text-[#111827] text-[1.02rem] mb-5">성장 타임라인</h3>
 
       {/* Horizontal scroll — snaps on mobile */}
@@ -3085,7 +3154,7 @@ function TEGrowthTimeline() {
                   </div>
 
                   {/* Label */}
-                  <span className="text-[11px] font-bold text-center leading-tight"
+                  <span className="text-[13px] font-bold text-center leading-tight"
                     style={{
                       color: stage.current
                         ? T.green
@@ -3098,7 +3167,7 @@ function TEGrowthTimeline() {
 
                   {/* "현재" badge */}
                   {stage.current && (
-                    <span className="text-[9px] font-bold text-white px-2 py-0.5 rounded-full fade-in-up"
+                    <span className="text-[11px] font-bold text-white px-2 py-0.5 rounded-full fade-in-up"
                       style={{ backgroundColor:T.green }}>
                       현재
                     </span>
@@ -3136,7 +3205,7 @@ function TETodaysGrowthCard() {
       <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/5 pointer-events-none"/>
 
       <div className="relative z-10">
-        <p className="text-white/50 text-[11px] font-semibold uppercase tracking-wider mb-1">오늘 획득</p>
+        <p className="text-white/50 text-[13px] font-semibold uppercase tracking-wider mb-1">오늘 획득</p>
         <h3 className="text-[1.08rem] font-bold text-white mb-4 leading-tight">오늘의 성장</h3>
 
         <div className="space-y-2.5">
@@ -3150,7 +3219,7 @@ function TETodaysGrowthCard() {
               </div>
               <div>
                 <p className="text-white font-bold text-sm leading-none">{value}</p>
-                <p className="text-white/45 text-[10px] mt-0.5">{label}</p>
+                <p className="text-white/45 text-[12px] mt-0.5">{label}</p>
               </div>
             </div>
           ))}
@@ -3165,7 +3234,7 @@ function TETodaysGrowthCard() {
 function TEAchievementsGrid() {
   return (
     <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
-      <p className="text-[11px] font-mono text-[#111827]/28 uppercase tracking-[0.35em] mb-2">배지</p>
+      <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">배지</p>
       <h3 className="font-bold text-[#111827] text-[1.02rem] mb-4">업적</h3>
 
       <div className="grid grid-cols-3 gap-3">
@@ -3179,15 +3248,15 @@ function TEAchievementsGrid() {
               filter:          unlocked ? "none" : "grayscale(0.4)",
             }}>
             <span className="text-[1.7rem] leading-none">{icon}</span>
-            <p className="text-[11px] font-bold text-[#111827] text-center leading-tight">
+            <p className="text-[13px] font-bold text-[#111827] text-center leading-tight">
               {label}
             </p>
             {unlocked ? (
-              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full text-[#065F46] bg-[#D1FAE5]">
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full text-[#065F46] bg-[#D1FAE5]">
                 달성
               </span>
             ) : (
-              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full text-[#111827]/30 bg-[#111827]/06">
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full text-[#111827]/50 bg-[#111827]/06">
                 잠김
               </span>
             )}
@@ -3211,14 +3280,14 @@ function TEWeeklyChart() {
 
   return (
     <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
-      <p className="text-[11px] font-mono text-[#111827]/28 uppercase tracking-[0.35em] mb-2">주간 성장</p>
+      <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">주간 성장</p>
       <h3 className="font-bold text-[#111827] text-[1.02rem] mb-5">Weekly Growth</h3>
 
       {/* XP labels row */}
       <div className="flex justify-between mb-1.5">
         {TE_WEEKLY.map(d => (
           <div key={d.day} className="flex-1 flex justify-center">
-            <span className="text-[9px] font-mono text-[#111827]/28">{d.xp}</span>
+            <span className="text-[11px] font-mono text-[#111827]/48">{d.xp}</span>
           </div>
         ))}
       </div>
@@ -3251,7 +3320,7 @@ function TEWeeklyChart() {
       <div className="flex justify-between mt-2.5">
         {TE_WEEKLY.map(d => (
           <div key={d.day} className="flex-1 flex justify-center">
-            <span className="text-[11px] font-semibold"
+            <span className="text-[13px] font-semibold"
               style={{ color: d.today ? T.blue : "rgba(17,24,39,0.35)" }}>
               {d.day}
             </span>
@@ -3264,14 +3333,14 @@ function TEWeeklyChart() {
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1.5">
             <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor:T.green }}/>
-            <span className="text-[11px] text-[#111827]/42">평일</span>
+            <span className="text-[13px] text-[#111827]/62">평일</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor:T.blue }}/>
-            <span className="text-[11px] text-[#111827]/42">오늘</span>
+            <span className="text-[13px] text-[#111827]/62">오늘</span>
           </div>
         </div>
-        <p className="text-[11px] font-bold text-[#111827]/50">
+        <p className="text-[13px] font-bold text-[#111827]/70">
           총 <span style={{ color:T.blue }}>710 XP</span>
         </p>
       </div>
@@ -3288,7 +3357,7 @@ function TreeEvolutionScreen({ onFinish }: { onFinish:()=>void }) {
       <main className="max-w-[600px] mx-auto px-4 sm:px-5 pt-5 pb-36 space-y-4">
         {/* Page subtitle */}
         <div className="text-center pt-1 pb-1">
-          <p className="text-[0.875rem] font-semibold text-[#111827]/42 leading-snug">
+          <p className="text-[0.875rem] font-semibold text-[#111827]/62 leading-snug">
             오늘도 한 걸음 성장했어요 🌱
           </p>
         </div>
@@ -3423,9 +3492,9 @@ function GDHeroCard({ exp }: { exp:number }) {
             </div>
 
             <div className="flex justify-between">
-              <span className="text-white/35 text-[10px] font-mono">Lv.{lvl.level}</span>
-              <span className="text-white/52 text-[10px] font-mono font-semibold">{pct}%</span>
-              <span className="text-white/35 text-[10px] font-mono">{lvl.isMax ? "MAX" : `Lv.${lvl.level + 1}`}</span>
+              <span className="text-white/35 text-[12px] font-mono">Lv.{lvl.level}</span>
+              <span className="text-white/52 text-[12px] font-mono font-semibold">{pct}%</span>
+              <span className="text-white/35 text-[12px] font-mono">{lvl.isMax ? "MAX" : `Lv.${lvl.level + 1}`}</span>
             </div>
           </div>
         </div>
@@ -3441,10 +3510,54 @@ function GDHeroCard({ exp }: { exp:number }) {
               : <>Lv.{lvl.level + 1}까지 <span className="font-bold text-white">{lvl.xpToNext} XP</span> 남음</>}
           </p>
         </div>
-        <p className="text-white/45 text-[11px] leading-relaxed px-1">
+        <p className="text-white/45 text-[13px] leading-relaxed px-1">
           미션을 완료하면 XP를 받아요. XP가 쌓이면 레벨이 오르고, 나무가 한 단계씩 자라요.
         </p>
       </div>
+    </div>
+  );
+}
+
+// ── GDTodayMissionNudge — 오늘 미완료 미션에 대한 액션 카드 ────────────────────
+function GDTodayMissionNudge({ history, dayPlans, todayStr, onStartStudy }: {
+  history:Record<string,string[]>; dayPlans:DayPlanOverrides; todayStr:string; onStartStudy:()=>void;
+}) {
+  const sched = FULL_SCHEDULE.find(d => d.date === todayStr);
+  if (!sched || sched.kind !== "study") return null;
+
+  const planned = getCheckedSubjectIds(todayStr, dayPlans);
+  const done    = (history[todayStr] ?? []).filter(id => planned.includes(id)).length;
+  if (planned.length === 0) return null;
+
+  if (done >= planned.length) {
+    return (
+      <div className="rounded-3xl p-5 flex items-center gap-3" style={{ background:"#D1FAE5", border:"1.5px solid #10B98130" }}>
+        <div className="w-10 h-10 rounded-2xl bg-white/70 flex items-center justify-center flex-shrink-0">
+          <span className="text-lg">🎉</span>
+        </div>
+        <div>
+          <p className="font-bold text-[#065F46] text-sm">오늘 미션을 모두 완료했어요!</p>
+          <p className="text-[12px] text-[#047857]/70 mt-0.5">잘하고 있어요. 내일도 화이팅!</p>
+        </div>
+      </div>
+    );
+  }
+
+  const remaining = planned.length - done;
+  return (
+    <div className="rounded-3xl p-5 flex items-center gap-3" style={{ background:"#FEF3C7", border:"1.5px solid #F59E0B30" }}>
+      <div className="w-10 h-10 rounded-2xl bg-white/70 flex items-center justify-center flex-shrink-0">
+        <span className="text-lg">⏰</span>
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="font-bold text-[#92400E] text-sm">오늘 미션이 {remaining}개 남았어요</p>
+        <p className="text-[12px] text-[#B45309]/75 mt-0.5">{done}/{planned.length} 완료 · 지금 이어서 해볼까요?</p>
+      </div>
+      <button onClick={onStartStudy}
+        className="flex-shrink-0 px-4 py-2 rounded-xl text-white text-[13px] font-bold"
+        style={{ background:"linear-gradient(135deg,#F59E0B,#D97706)" }}>
+        시작하기
+      </button>
     </div>
   );
 }
@@ -3472,7 +3585,7 @@ function GDExamProgressCard({ history, dayPlans, todayStr }: {
 
   return (
     <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
-      <p className="text-[11px] font-mono text-[#111827]/28 uppercase tracking-[0.35em] mb-2">진행 현황</p>
+      <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">진행 현황</p>
       <h3 className="font-bold text-[#111827] text-[1.02rem] mb-5">중간고사 대비 진행률</h3>
 
       <div className="flex flex-col sm:flex-row items-center gap-6">
@@ -3496,7 +3609,7 @@ function GDExamProgressCard({ history, dayPlans, todayStr }: {
           {/* Centre text */}
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5">
             <span className="text-[1.6rem] font-bold text-[#111827] leading-none">{pct}%</span>
-            <span className="text-[11px] text-[#111827]/42 font-mono leading-none">{doneStudyDays.length} / {pastStudyDays.length}일</span>
+            <span className="text-[13px] text-[#111827]/62 font-mono leading-none">{doneStudyDays.length} / {pastStudyDays.length}일</span>
           </div>
         </div>
 
@@ -3509,7 +3622,7 @@ function GDExamProgressCard({ history, dayPlans, todayStr }: {
           ].map(({ label, value, color, bg }) => (
             <div key={label} className="flex items-center justify-between px-4 py-2.5 rounded-2xl"
               style={{ backgroundColor:bg }}>
-              <span className="text-sm text-[#111827]/58">{label}</span>
+              <span className="text-sm text-[#111827]/74">{label}</span>
               <span className="text-sm font-bold" style={{ color }}>{value}</span>
             </div>
           ))}
@@ -3525,15 +3638,15 @@ function GDExamProgressCard({ history, dayPlans, todayStr }: {
 
 // ── GDWeeklyLearning ──────────────────────────────────────────────────────────
 
-function GDWeeklyLearning({ history, streak, todayStr }: {
-  history:Record<string,string[]>; streak:number; todayStr:string;
+function GDWeeklyLearning({ history, streak, todayStr, dayPlans }: {
+  history:Record<string,string[]>; streak:number; todayStr:string; dayPlans:DayPlanOverrides;
 }) {
-  const week = getCurrentWeekStatus(history, todayStr);
+  const week = getCurrentWeekStatus(history, todayStr, dayPlans);
   return (
     <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <p className="text-[11px] font-mono text-[#111827]/28 uppercase tracking-[0.35em] mb-1">이번 주</p>
+          <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-1">이번 주</p>
           <h3 className="font-bold text-[#111827] text-[1.02rem]">이번 주 학습</h3>
         </div>
         {/* Streak */}
@@ -3545,27 +3658,32 @@ function GDWeeklyLearning({ history, streak, todayStr }: {
 
       <div className="grid grid-cols-7 gap-1.5">
         {week.map((d, i) => {
-          const missed = !d.done && !d.isToday && !d.isFuture && !d.isRest;
+          const missed = !d.done && !d.partial && !d.isToday && !d.isFuture && !d.isRest && d.total > 0;
           return (
             <div key={i} className="flex flex-col items-center gap-1.5">
               <div
                 className="w-10 h-10 rounded-2xl flex items-center justify-center tap-scale"
                 style={{
-                  backgroundColor: d.done ? T.green : d.isToday ? "transparent" : "rgba(17,24,39,0.04)",
+                  backgroundColor: d.done ? T.green : d.partial ? "#FEF3C7" : missed ? "#FEE2E2" : d.isToday ? "transparent" : "rgba(17,24,39,0.04)",
                   border: d.isToday
                     ? `2px solid ${T.blue}`
                     : d.done
                     ? `2px solid ${T.green}`
+                    : d.partial
+                    ? "2px solid #F59E0B"
+                    : missed
+                    ? "2px solid #FCA5A5"
                     : "2px solid rgba(17,24,39,0.08)",
                   boxShadow: d.done ? `0 3px 10px ${T.green}32` : d.isToday ? `0 3px 10px ${T.blue}22` : "none",
                 }}>
                 {d.done    && <span className="text-[1rem] leading-none">✅</span>}
-                {!d.done && d.isToday  && <span className="text-[1rem] leading-none">⏳</span>}
-                {!d.done && !d.isToday && d.isRest   && <span className="text-[0.9rem] leading-none">🌿</span>}
-                {missed && <span className="text-sm text-[#111827]/28 font-bold">○</span>}
+                {!d.done && d.partial && <span className="text-[11px] font-bold text-[#B45309]">{d.doneCount}/{d.total}</span>}
+                {!d.done && !d.partial && d.isToday  && <span className="text-[1rem] leading-none">⏳</span>}
+                {!d.done && !d.partial && !d.isToday && d.isRest   && <span className="text-[0.9rem] leading-none">🌿</span>}
+                {missed && <span className="text-sm text-[#DC2626] font-bold">○</span>}
               </div>
-              <span className="text-[10px] font-bold"
-                style={{ color:d.done ? "#065F46" : d.isToday ? T.blue : "rgba(17,24,39,0.28)" }}>
+              <span className="text-[12px] font-bold"
+                style={{ color:d.done ? "#065F46" : d.partial ? "#B45309" : missed ? "#DC2626" : d.isToday ? T.blue : "rgba(17,24,39,0.28)" }}>
                 {d.day}
               </span>
             </div>
@@ -3585,12 +3703,12 @@ function GDBadgesGrid({ exp, streak, history, dayPlans }: BadgeCtx) {
     <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
       <div className="flex items-center justify-between mb-1">
         <div>
-          <p className="text-[11px] font-mono text-[#111827]/28 uppercase tracking-[0.35em] mb-1">업적</p>
+          <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-1">업적</p>
           <h3 className="font-bold text-[#111827] text-[1.02rem]">배지</h3>
         </div>
-        <span className="text-[11px] font-bold text-[#111827]/32">{earned} / {badges.length}</span>
+        <span className="text-[13px] font-bold text-[#111827]/52">{earned} / {badges.length}</span>
       </div>
-      <p className="text-[11px] text-[#111827]/40 leading-relaxed mb-4">
+      <p className="text-[13px] text-[#111827]/60 leading-relaxed mb-4">
         배지는 우현이가 얼마나 꾸준히 노력했는지 엄마에게 보여주는 기록이에요.
       </p>
 
@@ -3607,9 +3725,9 @@ function GDBadgesGrid({ exp, streak, history, dayPlans }: BadgeCtx) {
             <span className="text-[1.65rem] leading-none flex-shrink-0">{icon}</span>
             <div className="min-w-0">
               <p className="text-[0.82rem] font-bold text-[#111827] leading-tight">{label}</p>
-              <p className="text-[10px] text-[#111827]/40 mt-0.5 truncate">{desc}</p>
+              <p className="text-[12px] text-[#111827]/60 mt-0.5 truncate">{desc}</p>
               {!unlocked && (
-                <span className="text-[9px] font-bold text-[#111827]/28 bg-[#111827]/06 px-1.5 py-0.5 rounded-full mt-1 inline-block">
+                <span className="text-[11px] font-bold text-[#111827]/48 bg-[#111827]/06 px-1.5 py-0.5 rounded-full mt-1 inline-block">
                   잠김
                 </span>
               )}
@@ -3644,7 +3762,7 @@ function GDGrowthStats({ history, streak }: { history:Record<string,string[]>; s
 
   return (
     <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
-      <p className="text-[11px] font-mono text-[#111827]/28 uppercase tracking-[0.35em] mb-2">통계</p>
+      <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">통계</p>
       <h3 className="font-bold text-[#111827] text-[1.02rem] mb-4">성장 통계</h3>
       <div className="grid grid-cols-2 gap-3">
         {STATS.map(({ label, value, icon:Icon, color, bg }) => (
@@ -3657,7 +3775,7 @@ function GDGrowthStats({ history, streak }: { history:Record<string,string[]>; s
             </div>
             <div>
               <p className="text-[1.05rem] font-bold text-[#111827] leading-tight">{value}</p>
-              <p className="text-[11px] text-[#111827]/48 mt-0.5">{label}</p>
+              <p className="text-[13px] text-[#111827]/68 mt-0.5">{label}</p>
             </div>
           </div>
         ))}
@@ -3674,7 +3792,7 @@ function GDNextGoals({ exp, streak, history, dayPlans, onGoalScore }: BadgeCtx &
 
   return (
     <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
-      <p className="text-[11px] font-mono text-[#111827]/28 uppercase tracking-[0.35em] mb-2">목표</p>
+      <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">목표</p>
       <h3 className="font-bold text-[#111827] text-[1.02rem] mb-4">다음 목표</h3>
 
       <div className="space-y-2.5 mb-2.5">
@@ -3687,11 +3805,11 @@ function GDNextGoals({ exp, streak, history, dayPlans, onGoalScore }: BadgeCtx &
               <p className="text-sm font-bold text-[#111827] leading-tight">
                 {lvl.isMax ? "최고 레벨 달성" : `Lv.${lvl.level + 1} 달성`}
               </p>
-              <p className="text-[11px] text-[#111827]/45 mt-0.5">
+              <p className="text-[13px] text-[#111827]/65 mt-0.5">
                 {lvl.isMax ? "더 이상 오를 레벨이 없어요" : `${lvl.xpToNext} XP 더 필요`}
               </p>
             </div>
-            <span className="text-[11px] font-bold font-mono flex-shrink-0" style={{ color:T.amber }}>{lvl.pct}%</span>
+            <span className="text-[13px] font-bold font-mono flex-shrink-0" style={{ color:T.amber }}>{lvl.pct}%</span>
           </div>
           <div className="h-1.5 bg-[#111827]/08 rounded-full overflow-hidden">
             <div className="h-full rounded-full" style={{ width:`${lvl.pct}%`, backgroundColor:T.amber }}/>
@@ -3707,7 +3825,7 @@ function GDNextGoals({ exp, streak, history, dayPlans, onGoalScore }: BadgeCtx &
               <p className="text-sm font-bold text-[#111827] leading-tight">
                 {nextBadge ? `다음 배지: ${nextBadge.label}` : "모든 배지 획득!"}
               </p>
-              <p className="text-[11px] text-[#111827]/45 mt-0.5">
+              <p className="text-[13px] text-[#111827]/65 mt-0.5">
                 {nextBadge ? nextBadge.desc : "배지를 전부 모았어요, 최고예요!"}
               </p>
             </div>
@@ -3731,10 +3849,10 @@ function GDBottomArea({
 }: { onHome:()=>void; onStartStudy:()=>void; onTab:(i:number)=>void }) {
   const NAV_ITEMS = [
     { icon:Home,       label:"홈",     active:false, fn:()=>onTab(0) },
-    { icon:Target,     label:"미션",   active:false, fn:()=>onTab(1) },
+    { icon:Target,     label:"미션설정", active:false, fn:()=>onTab(1) },
     { icon:TrendingUp, label:"성장",   active:true,  fn:()=>onTab(2) },
     { icon:BookOpen,   label:"복습",   active:false, fn:()=>onTab(3) },
-    { icon:User,       label:"프로필", active:false, fn:()=>onTab(4) },
+    { icon:User,       label:"학습현황", active:false, fn:()=>onTab(4) },
   ];
 
   return (
@@ -3765,7 +3883,7 @@ function GDBottomArea({
               style={{ color: active ? T.blue : "#9CA3AF" }}>
               {active && <span className="absolute inset-0 rounded-2xl bg-[#2563EB]/8"/>}
               <Icon className="w-5 h-5 relative z-10"/>
-              <span className="text-[10px] font-semibold relative z-10">{label}</span>
+              <span className="text-[12px] font-semibold relative z-10">{label}</span>
             </button>
           ))}
         </div>
@@ -3790,14 +3908,15 @@ function GrowthDashboardScreen({
       <main className="max-w-[600px] mx-auto px-4 sm:px-5 pt-5 pb-52 space-y-4">
         {/* Subtitle */}
         <div className="text-center pt-1 pb-1">
-          <p className="text-[0.875rem] font-semibold text-[#111827]/42 leading-snug">
+          <p className="text-[0.875rem] font-semibold text-[#111827]/62 leading-snug">
             매일 조금씩 성장하고 있어요 🌱
           </p>
         </div>
 
         <GDHeroCard exp={exp}/>
+        <GDTodayMissionNudge history={history} dayPlans={dayPlans} todayStr={todayStr} onStartStudy={onStartStudy}/>
         <GDExamProgressCard history={history} dayPlans={dayPlans} todayStr={todayStr}/>
-        <GDWeeklyLearning history={history} streak={streak} todayStr={todayStr}/>
+        <GDWeeklyLearning history={history} streak={streak} todayStr={todayStr} dayPlans={dayPlans}/>
         <GDBadgesGrid exp={exp} streak={streak} history={history} dayPlans={dayPlans}/>
         <GDGrowthStats history={history} streak={streak}/>
         <GDNextGoals exp={exp} streak={streak} history={history} dayPlans={dayPlans} onGoalScore={onGoalScore}/>
@@ -3910,7 +4029,7 @@ function CalHeroCard({ history, dayPlans, streak, todayStr }: {
 
   return (
     <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
-      <p className="text-[11px] font-mono text-[#111827]/28 uppercase tracking-[0.35em] mb-4">현재 진행</p>
+      <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-4">현재 진행</p>
 
       <div className="flex items-center gap-5 sm:gap-8">
         {/* Circular progress ring */}
@@ -3931,14 +4050,14 @@ function CalHeroCard({ history, dayPlans, streak, todayStr }: {
           {/* Centre label */}
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5">
             <span className="text-[1.3rem] font-bold text-[#111827] leading-none">{ringPct}%</span>
-            <span className="text-[10px] text-[#111827]/38 font-mono leading-none">{doneStudyDays.length}/{pastStudyDays.length}일</span>
+            <span className="text-[12px] text-[#111827]/58 font-mono leading-none">{doneStudyDays.length}/{pastStudyDays.length}일</span>
           </div>
         </div>
 
         {/* Stats */}
         <div className="flex-1 space-y-3">
           <div>
-            <p className="text-[11px] text-[#111827]/40 mb-0.5">중간고사까지</p>
+            <p className="text-[13px] text-[#111827]/60 mb-0.5">중간고사까지</p>
             <p className="text-base font-bold text-[#111827]">{dday >= 0 ? `D-${dday}` : "시험 기간"}</p>
           </div>
 
@@ -3988,7 +4107,7 @@ function CalDayCell({
         <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor:cfg.dot }}/>
       )}
       {cfg.icon && (
-        <span className="text-[10px] leading-none">{cfg.icon}</span>
+        <span className="text-[12px] leading-none">{cfg.icon}</span>
       )}
     </button>
   );
@@ -4016,17 +4135,17 @@ function CalMonthlyCard({
         <div className="flex items-center gap-1">
           <button onClick={() => setMonthIdx(i => Math.max(0, i - 1))} disabled={monthIdx === 0}
             className="w-7 h-7 rounded-lg flex items-center justify-center disabled:opacity-25 hover:bg-black/[0.04] transition-colors">
-            <ChevronLeft className="w-4 h-4 text-[#111827]/50"/>
+            <ChevronLeft className="w-4 h-4 text-[#111827]/70"/>
           </button>
           <h3 className="font-bold text-[#111827] text-[1.05rem] w-[104px] text-center">{label}</h3>
           <button onClick={() => setMonthIdx(i => Math.min(RANGE_MONTHS.length - 1, i + 1))} disabled={monthIdx === RANGE_MONTHS.length - 1}
             className="w-7 h-7 rounded-lg flex items-center justify-center disabled:opacity-25 hover:bg-black/[0.04] transition-colors">
-            <ChevronRight className="w-4 h-4 text-[#111827]/50"/>
+            <ChevronRight className="w-4 h-4 text-[#111827]/70"/>
           </button>
         </div>
         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[#EFF6FF] border border-[#2563EB]/12">
           <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor:T.blue }}/>
-          <span className="text-[11px] font-bold text-[#2563EB]">오늘</span>
+          <span className="text-[13px] font-bold text-[#2563EB]">오늘</span>
         </div>
       </div>
 
@@ -4034,13 +4153,13 @@ function CalMonthlyCard({
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mb-4">
         {[
           { visual:<div className="w-2 h-2 rounded-full bg-[#10B981]"/>, label:"공부 완료" },
-          { visual:<span className="text-[11px] leading-none">🌱</span>,  label:"보충 완료" },
-          { visual:<span className="text-[11px] leading-none">🎌</span>,  label:"공휴일" },
-          { visual:<span className="text-[11px] leading-none">🎯</span>,  label:"중간고사" },
+          { visual:<span className="text-[13px] leading-none">🌱</span>,  label:"보충 완료" },
+          { visual:<span className="text-[13px] leading-none">🎌</span>,  label:"공휴일" },
+          { visual:<span className="text-[13px] leading-none">🎯</span>,  label:"중간고사" },
         ].map(({ visual, label:l }) => (
           <div key={l} className="flex items-center gap-1">
             {visual}
-            <span className="text-[10px] text-[#111827]/38">{l}</span>
+            <span className="text-[12px] text-[#111827]/58">{l}</span>
           </div>
         ))}
       </div>
@@ -4049,7 +4168,7 @@ function CalMonthlyCard({
       <div className="grid grid-cols-7 mb-1.5">
         {CAL_DOW.map(h => (
           <div key={h} className="flex justify-center">
-            <span className="text-[10px] font-bold text-[#111827]/28">{h}</span>
+            <span className="text-[12px] font-bold text-[#111827]/48">{h}</span>
           </div>
         ))}
       </div>
@@ -4077,8 +4196,8 @@ function CalDayDetail({ date, history, dayPlans }: {
   if (!date) {
     return (
       <div className={`${T.glassCard} rounded-3xl p-6 flex flex-col items-center justify-center gap-3 py-9`} style={{ boxShadow:T.cardShadow }}>
-        <Sun className="w-6 h-6 text-[#111827]/22"/>
-        <p className="text-sm text-[#111827]/38">날짜를 선택해보세요.</p>
+        <Sun className="w-6 h-6 text-[#111827]/42"/>
+        <p className="text-sm text-[#111827]/58">날짜를 선택해보세요.</p>
       </div>
     );
   }
@@ -4093,7 +4212,7 @@ function CalDayDetail({ date, history, dayPlans }: {
     return (
       <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
         <h3 className="font-bold text-[#111827] text-[1.05rem] mb-2">{dateLabel}</h3>
-        <p className="text-sm text-[#111827]/38">학습 기간(7/21~10/2) 밖의 날짜예요.</p>
+        <p className="text-sm text-[#111827]/58">학습 기간(7/21~10/2) 밖의 날짜예요.</p>
       </div>
     );
   }
@@ -4103,9 +4222,9 @@ function CalDayDetail({ date, history, dayPlans }: {
       <div className={`${T.glassCard} rounded-3xl p-6 fade-in-up`} style={{ boxShadow:T.cardShadow }}>
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-bold text-[#111827] text-[1.05rem]">{dateLabel}</h3>
-          <span className="text-[11px] font-bold px-2.5 py-1 rounded-xl bg-[#FFF1F2] text-[#9F1239]">🎯 중간고사</span>
+          <span className="text-[13px] font-bold px-2.5 py-1 rounded-xl bg-[#FFF1F2] text-[#9F1239]">🎯 중간고사</span>
         </div>
-        <p className="text-sm text-[#111827]/55 leading-relaxed">그동안 준비한 만큼 실력을 보여줄 시간이야. 우현이 파이팅! 💪</p>
+        <p className="text-sm text-[#111827]/72 leading-relaxed">그동안 준비한 만큼 실력을 보여줄 시간이야. 우현이 파이팅! 💪</p>
       </div>
     );
   }
@@ -4119,10 +4238,10 @@ function CalDayDetail({ date, history, dayPlans }: {
       <div className={`${T.glassCard} rounded-3xl p-6 fade-in-up`} style={{ boxShadow:T.cardShadow }}>
         <div className="flex items-start justify-between mb-4">
           <div>
-            <p className="text-[11px] font-mono text-[#111827]/28 uppercase tracking-[0.35em] mb-1">날짜 상세</p>
+            <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-1">날짜 상세</p>
             <h3 className="font-bold text-[#111827] text-[1.05rem]">{dateLabel}</h3>
           </div>
-          <span className="text-[11px] font-bold px-2.5 py-1 rounded-xl"
+          <span className="text-[13px] font-bold px-2.5 py-1 rounded-xl"
             style={{
               backgroundColor: allDone ? "#D1FAE5" : isFuture ? "#EFF6FF" : done.length > 0 ? "#FEF3C7" : "#FFF1F2",
               color:            allDone ? "#065F46" : isFuture ? "#1E40AF" : done.length > 0 ? "#92400E" : "#9F1239",
@@ -4131,7 +4250,7 @@ function CalDayDetail({ date, history, dayPlans }: {
           </span>
         </div>
         {assigned.length === 0 ? (
-          <p className="text-sm text-[#111827]/38">배정된 과목이 없어요.</p>
+          <p className="text-sm text-[#111827]/58">배정된 과목이 없어요.</p>
         ) : (
         <div className="space-y-1.5">
           {assigned.map(id => {
@@ -4163,10 +4282,10 @@ function CalDayDetail({ date, history, dayPlans }: {
     <div className={`${T.glassCard} rounded-3xl p-6 fade-in-up`} style={{ boxShadow:T.cardShadow }}>
       <div className="flex items-start justify-between mb-4">
         <div>
-          <p className="text-[11px] font-mono text-[#111827]/28 uppercase tracking-[0.35em] mb-1">보충일</p>
+          <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-1">보충일</p>
           <h3 className="font-bold text-[#111827] text-[1.05rem]">{dateLabel}</h3>
         </div>
-        <span className="text-[11px] font-bold px-2.5 py-1 rounded-xl bg-[#EDE9FE] text-[#5B21B6]">
+        <span className="text-[13px] font-bold px-2.5 py-1 rounded-xl bg-[#EDE9FE] text-[#5B21B6]">
           {sched.kind === "holiday" ? (sched.label ?? "공휴일") : "주말"}
         </span>
       </div>
@@ -4188,13 +4307,13 @@ function CalDayDetail({ date, history, dayPlans }: {
 
       {shortfall.length > 0 ? (
         <div className="p-3.5 rounded-xl bg-[#FFF1F2] border border-[#E11D48]/12">
-          <p className="text-[11px] font-bold text-[#9F1239] mb-2">이번 주 보충이 필요해요</p>
+          <p className="text-[13px] font-bold text-[#9F1239] mb-2">이번 주 보충이 필요해요</p>
           <div className="flex flex-wrap gap-1.5">
             {shortfall.map(c => {
               const subj = EXAM_SUBJECTS.find(s => s.id === c.subjectId);
               if (!subj) return null;
               return (
-                <span key={c.subjectId} className="text-[11px] font-semibold px-2.5 py-1 rounded-full"
+                <span key={c.subjectId} className="text-[13px] font-semibold px-2.5 py-1 rounded-full"
                   style={{ backgroundColor:subj.bg, color:subj.color }}>
                   {subj.name} {c.missing}회
                 </span>
@@ -4235,7 +4354,7 @@ function CalStatistics({ history, streak }: { history:Record<string,string[]>; s
 
   return (
     <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
-      <p className="text-[11px] font-mono text-[#111827]/28 uppercase tracking-[0.35em] mb-2">통계</p>
+      <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">통계</p>
       <h3 className="font-bold text-[#111827] text-[1.02rem] mb-4">7.21 ~ 10.2 누적</h3>
 
       <div className="grid grid-cols-3 gap-3">
@@ -4248,7 +4367,7 @@ function CalStatistics({ history, streak }: { history:Record<string,string[]>; s
             </div>
             <div>
               <p className="text-[0.9rem] font-bold text-[#111827] leading-tight">{value}</p>
-              <p className="text-[10px] text-[#111827]/48 mt-0.5">{label}</p>
+              <p className="text-[12px] text-[#111827]/68 mt-0.5">{label}</p>
             </div>
           </div>
         ))}
@@ -4264,10 +4383,10 @@ function CalBottomArea({
 }: { onHome:()=>void; onStartStudy:()=>void; onTab:(i:number)=>void; onSchedule:()=>void }) {
   const NAV = [
     { icon:Home,       label:"홈",     active:false, fn:()=>onTab(0) },
-    { icon:Target,     label:"미션",   active:false, fn:()=>onTab(1) },
+    { icon:Target,     label:"미션설정", active:false, fn:()=>onTab(1) },
     { icon:TrendingUp, label:"성장",   active:false, fn:()=>onTab(2) },
     { icon:BookOpen,   label:"복습",   active:true,  fn:()=>onTab(3) },
-    { icon:User,       label:"프로필", active:false, fn:()=>onTab(4) },
+    { icon:User,       label:"학습현황", active:false, fn:()=>onTab(4) },
   ];
 
   return (
@@ -4302,7 +4421,7 @@ function CalBottomArea({
               style={{ color:active ? T.blue : "#9CA3AF" }}>
               {active && <span className="absolute inset-0 rounded-2xl bg-[#2563EB]/8"/>}
               <Icon className="w-5 h-5 relative z-10"/>
-              <span className="text-[10px] font-semibold relative z-10">{label}</span>
+              <span className="text-[12px] font-semibold relative z-10">{label}</span>
             </button>
           ))}
         </div>
@@ -4330,7 +4449,7 @@ function CalendarScreen({
       <main className="max-w-[600px] mx-auto px-4 sm:px-5 pt-5 pb-60 space-y-4">
         {/* Subtitle */}
         <div className="text-center pt-1 pb-1">
-          <p className="text-[0.875rem] font-semibold text-[#111827]/42 leading-snug">
+          <p className="text-[0.875rem] font-semibold text-[#111827]/62 leading-snug">
             7.21 ~ 10.2 중간고사 대비 학습 여정을 확인해보세요.
           </p>
         </div>
@@ -4398,9 +4517,9 @@ function MomApprovalCard({
           style={{ backgroundColor:"#EFF6FF" }}>{photo.thumbnail}</div>
         <div className="flex-1 min-w-0">
           <p className="font-bold text-[#111827] text-sm leading-tight">{photo.subject}</p>
-          <p className="text-[#111827]/45 text-[11px] truncate">{photo.mission}</p>
+          <p className="text-[#111827]/65 text-[13px] truncate">{photo.mission}</p>
         </div>
-        <span className="text-[10px] font-mono text-[#111827]/28">{photo.time}</span>
+        <span className="text-[12px] font-mono text-[#111827]/48">{photo.time}</span>
       </div>
 
       {/* Simulated photo area */}
@@ -4409,7 +4528,7 @@ function MomApprovalCard({
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
           <span className="text-5xl">{photo.thumbnail}</span>
           <p className="text-white/40 text-xs">공부 인증 사진</p>
-          <p className="text-white/25 text-[10px]">{photo.mission}</p>
+          <p className="text-white/25 text-[12px]">{photo.mission}</p>
         </div>
         {/* Corner marks */}
         {["top-3 left-3 border-t-2 border-l-2","top-3 right-3 border-t-2 border-r-2",
@@ -4428,7 +4547,7 @@ function MomApprovalCard({
       {!decided && (
         <div className="flex gap-3">
           <button onClick={handleReject}
-            className="flex-1 py-3 rounded-2xl font-bold text-sm border-2 border-[#E5E7EB] text-[#111827]/55 hover:border-[#E11D48]/30 hover:text-[#E11D48] transition-all">
+            className="flex-1 py-3 rounded-2xl font-bold text-sm border-2 border-[#E5E7EB] text-[#111827]/72 hover:border-[#E11D48]/30 hover:text-[#E11D48] transition-all">
             ❌ 다시 찍기
           </button>
           <button onClick={handleApprove}
@@ -4463,14 +4582,14 @@ function MomMessageComposer({ onSend }: { onSend:(msg:string)=>void }) {
 
   return (
     <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
-      <p className="text-[11px] font-mono text-[#111827]/28 uppercase tracking-[0.35em] mb-2">응원 메시지</p>
+      <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">응원 메시지</p>
       <h3 className="font-bold text-[#111827] text-[1.02rem] mb-4">우현이에게 메시지 보내기</h3>
 
       {/* Quick templates */}
       <div className="flex flex-wrap gap-2 mb-4">
         {MOM_MESSAGES.slice(0,3).map((m,i)=>(
           <button key={i} onClick={()=>setMsg(m)}
-            className="text-[11px] font-semibold px-3 py-1.5 rounded-xl transition-all"
+            className="text-[13px] font-semibold px-3 py-1.5 rounded-xl transition-all"
             style={{ backgroundColor:`${T.rose}0F`, color:"#C7355C", border:`1px solid ${T.rose}20` }}>
             {m.substring(0,14)}…
           </button>
@@ -4482,8 +4601,8 @@ function MomMessageComposer({ onSend }: { onSend:(msg:string)=>void }) {
         <textarea value={msg} onChange={e=>setMsg(e.target.value)} maxLength={150}
           placeholder="우현이에게 따뜻한 말 한마디를 남겨주세요."
           className="textarea-styled w-full rounded-2xl px-4 py-3.5 text-[#111827] text-sm leading-relaxed resize-none"
-          style={{ minHeight:100, fontFamily:T.serif }}/>
-        <span className="absolute bottom-3 right-4 text-[10px] font-mono text-[#111827]/22">{msg.length}/150</span>
+          style={{ minHeight:100 }}/>
+        <span className="absolute bottom-3 right-4 text-[12px] font-mono text-[#111827]/42">{msg.length}/150</span>
       </div>
 
       {sent ? (
@@ -4521,7 +4640,7 @@ function MomDashboardScreen({ onBack }: { onBack:()=>void }) {
           style={{ background:`linear-gradient(135deg,${T.rose},#C7355C)` }}>❤️</div>
         <div>
           <p className="font-bold text-[#111827] text-base">엄마 대시보드</p>
-          <p className="text-[#111827]/42 text-[12px]">우현이의 오늘 학습 현황</p>
+          <p className="text-[#111827]/62 text-[12px]">우현이의 오늘 학습 현황</p>
         </div>
       </div>
 
@@ -4538,7 +4657,7 @@ function MomDashboardScreen({ onBack }: { onBack:()=>void }) {
             </div>
             <div>
               <p className="text-base font-bold text-[#111827]">{value}</p>
-              <p className="text-[10px] text-[#111827]/45 mt-0.5">{label}</p>
+              <p className="text-[12px] text-[#111827]/65 mt-0.5">{label}</p>
             </div>
           </div>
         ))}
@@ -4549,7 +4668,7 @@ function MomDashboardScreen({ onBack }: { onBack:()=>void }) {
         <div className="flex items-center justify-between mb-3 px-1">
           <p className="font-bold text-[#111827] text-[0.95rem]">사진 승인 대기</p>
           {photos.length > 0 && (
-            <span className="text-[11px] font-bold px-2.5 py-1 rounded-full"
+            <span className="text-[13px] font-bold px-2.5 py-1 rounded-full"
               style={{ backgroundColor:`${T.amber}18`, color:"#92400E" }}>
               {photos.length}건 대기 중
             </span>
@@ -4565,14 +4684,14 @@ function MomDashboardScreen({ onBack }: { onBack:()=>void }) {
           <div className={`${T.glassCard} rounded-3xl p-8 text-center`} style={{ boxShadow:T.cardShadow }}>
             <span className="text-4xl mb-3 block">✅</span>
             <p className="font-bold text-[#111827] mb-1">모두 처리했어요!</p>
-            <p className="text-[#111827]/40 text-sm">대기 중인 사진이 없어요.</p>
+            <p className="text-[#111827]/60 text-sm">대기 중인 사진이 없어요.</p>
           </div>
         )}
       </div>
 
       {/* Weekly record */}
       <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
-        <p className="text-[11px] font-mono text-[#111827]/28 uppercase tracking-[0.35em] mb-2">이번 주</p>
+        <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">이번 주</p>
         <h3 className="font-bold text-[#111827] text-[1.02rem] mb-4">주간 출석</h3>
         <div className="grid grid-cols-7 gap-1.5">
           {MOM_WEEKLY_STATS.map(({ day, done, today }:{day:string;done:boolean;today?:boolean}, i)=>(
@@ -4583,9 +4702,9 @@ function MomDashboardScreen({ onBack }: { onBack:()=>void }) {
                   border: today ? `2px solid ${T.blue}` : done ? `2px solid ${T.green}` : "2px solid rgba(17,24,39,0.08)",
                 }}>
                 {done && !today ? <Check className="w-4 h-4 text-white"/> :
-                  <span className="text-[10px] font-bold" style={{ color:today?T.blue:"rgba(17,24,39,0.28)" }}>{day}</span>}
+                  <span className="text-[12px] font-bold" style={{ color:today?T.blue:"rgba(17,24,39,0.28)" }}>{day}</span>}
               </div>
-              <span className="text-[10px] font-bold" style={{ color:done?"#065F46":today?T.blue:"rgba(17,24,39,0.28)" }}>{day}</span>
+              <span className="text-[12px] font-bold" style={{ color:done?"#065F46":today?T.blue:"rgba(17,24,39,0.28)" }}>{day}</span>
             </div>
           ))}
         </div>
@@ -4596,16 +4715,16 @@ function MomDashboardScreen({ onBack }: { onBack:()=>void }) {
 
       {/* 42-day progress */}
       <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
-        <p className="text-[11px] font-mono text-[#111827]/28 uppercase tracking-[0.35em] mb-2">프로젝트 현황</p>
+        <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">프로젝트 현황</p>
         <h3 className="font-bold text-[#111827] text-[1.02rem] mb-4">42일 프로젝트 진행률</h3>
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm text-[#111827]/45">Day 18 / 42</span>
+          <span className="text-sm text-[#111827]/65">Day 18 / 42</span>
           <span className="text-sm font-bold text-[#2563EB]">43%</span>
         </div>
         <div className="h-3 bg-[#E2E8F0] rounded-full overflow-hidden mb-3">
           <div className="h-full rounded-full" style={{ width:"43%", background:`linear-gradient(90deg,${T.blue},${T.green})` }}/>
         </div>
-        <p className="text-[12px] text-[#111827]/40 text-center">24일 남았어요. 우현이 잘 하고 있어요! 🌱</p>
+        <p className="text-[12px] text-[#111827]/60 text-center">24일 남았어요. 우현이 잘 하고 있어요! 🌱</p>
       </div>
     </main>
   );
@@ -4671,12 +4790,12 @@ function NotificationItem({ notif, onRead }: {
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
-          <p className={`text-sm font-bold leading-tight ${notif.read ? "text-[#111827]/55" : "text-[#111827]"}`}>
+          <p className={`text-sm font-bold leading-tight ${notif.read ? "text-[#111827]/72" : "text-[#111827]"}`}>
             {notif.title}
           </p>
-          <span className="text-[10px] font-mono text-[#111827]/28 flex-shrink-0 mt-0.5">{formatRelativeTime(notif.createdAt)}</span>
+          <span className="text-[12px] font-mono text-[#111827]/48 flex-shrink-0 mt-0.5">{formatRelativeTime(notif.createdAt)}</span>
         </div>
-        <p className={`text-[12px] leading-snug mt-1 ${notif.read ? "text-[#111827]/35" : "text-[#111827]/58"}`}>
+        <p className={`text-[12px] leading-snug mt-1 ${notif.read ? "text-[#111827]/55" : "text-[#111827]/74"}`}>
           {notif.body}
         </p>
       </div>
@@ -4705,7 +4824,7 @@ function NotificationCenterScreen({ notifs, onRead, onReadAll }: {
       <div className="flex items-center justify-between px-1">
         <div>
           <p className="font-bold text-[#111827] text-base">알림 센터</p>
-          <p className="text-[#111827]/42 text-[12px]">{unreadCount > 0 ? `읽지 않은 알림 ${unreadCount}개` : "모두 읽었어요"}</p>
+          <p className="text-[#111827]/62 text-[12px]">{unreadCount > 0 ? `읽지 않은 알림 ${unreadCount}개` : "모두 읽었어요"}</p>
         </div>
         {unreadCount > 0 && (
           <button onClick={markAllRead}
@@ -4724,7 +4843,7 @@ function NotificationCenterScreen({ notifs, onRead, onReadAll }: {
           <div className="relative z-10 flex items-center gap-4">
             <div className="w-14 h-14 rounded-2xl bg-white/18 flex items-center justify-center text-2xl flex-shrink-0">🔔</div>
             <div>
-              <p className="text-white/62 text-[11px] font-semibold uppercase tracking-wider mb-1">새 알림</p>
+              <p className="text-white/62 text-[13px] font-semibold uppercase tracking-wider mb-1">새 알림</p>
               <p className="text-white font-bold text-lg leading-tight">{unreadCount}개의 새 알림이 있어요</p>
             </div>
           </div>
@@ -4742,7 +4861,7 @@ function NotificationCenterScreen({ notifs, onRead, onReadAll }: {
             }}>
             {label}
             {key !== "all" && (
-              <span className="ml-1.5 text-[10px]">
+              <span className="ml-1.5 text-[12px]">
                 {notifs.filter(n=>n.category===key && !n.read).length > 0
                   ? `·${notifs.filter(n=>n.category===key && !n.read).length}` : ""}
               </span>
@@ -4759,7 +4878,7 @@ function NotificationCenterScreen({ notifs, onRead, onReadAll }: {
           <div className={`${T.glassCard} rounded-3xl p-8 text-center`} style={{ boxShadow:T.cardShadow }}>
             <span className="text-4xl mb-3 block">🔕</span>
             <p className="font-bold text-[#111827] mb-1">알림이 없어요</p>
-            <p className="text-[#111827]/40 text-sm">
+            <p className="text-[#111827]/60 text-sm">
               {tab === "all" ? "미션을 완료하면 알림이 도착해요!" : "이 카테고리의 알림이 없어요."}
             </p>
           </div>
@@ -4869,8 +4988,8 @@ function SettingsScreen({ onBack, onProfile, onResetData, familyId, exp, streak 
           <div className="flex-1 min-w-0">
             <p className="font-bold text-[#111827] text-base">우현</p>
             <div className="flex items-center gap-2 mt-1">
-              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#D1FAE5] text-[#065F46]">Lv.{lvl.level} {lvl.name}</span>
-              <span className="text-[11px] text-[#111827]/35">Day {dayIndex} / {totalDays}</span>
+              <span className="text-[13px] font-bold px-2 py-0.5 rounded-full bg-[#D1FAE5] text-[#065F46]">Lv.{lvl.level} {lvl.name}</span>
+              <span className="text-[13px] text-[#111827]/55">Day {dayIndex} / {totalDays}</span>
             </div>
           </div>
           <button onClick={onProfile}
@@ -4890,7 +5009,7 @@ function SettingsScreen({ onBack, onProfile, onResetData, familyId, exp, streak 
             </div>
             <div>
               <p className="font-bold text-[#312E81] text-sm">가족과 공유하기</p>
-              <p className="text-[11px] text-[#4338CA]/55">이 링크로 열면 같은 학습 기록을 봐요</p>
+              <p className="text-[13px] text-[#4338CA]/55">이 링크로 열면 같은 학습 기록을 봐요</p>
             </div>
           </div>
           <button onClick={handleCopyShareLink}
@@ -4898,7 +5017,7 @@ function SettingsScreen({ onBack, onProfile, onResetData, familyId, exp, streak 
             style={{ backgroundColor: linkCopied ? "#059669" : "#4F46E5", color:"white" }}>
             {linkCopied ? <><CheckCircle2 className="w-4 h-4"/> 링크 복사됨!</> : <><Check className="w-4 h-4"/> 공유 링크 복사하기</>}
           </button>
-          <p className="text-[10px] text-[#4338CA]/45 mt-2.5 leading-relaxed">
+          <p className="text-[12px] text-[#4338CA]/45 mt-2.5 leading-relaxed">
             엄마·아이가 이 링크로 각자 열면 같은 데이터를 보고 수정할 수 있어요. 링크를 아는 사람만 볼 수 있으니 믿을 수 있는 사람에게만 보내주세요.
           </p>
         </div>
@@ -4906,7 +5025,7 @@ function SettingsScreen({ onBack, onProfile, onResetData, familyId, exp, streak 
 
       {/* ── 알림 설정 ── */}
       <div>
-        <p className="text-[11px] font-mono text-[#111827]/35 uppercase tracking-[0.3em] mb-3 px-1">알림 설정</p>
+        <p className="text-[13px] font-mono text-[#111827]/55 uppercase tracking-[0.3em] mb-3 px-1">알림 설정</p>
         <div className={`${T.glassCard} rounded-3xl overflow-hidden`} style={{ boxShadow:T.cardShadow }}>
           {([
             { label:"푸시 알림",     sub:"앱 알림 전체",     key:"pushAlerts"   as keyof SettingsState },
@@ -4917,7 +5036,7 @@ function SettingsScreen({ onBack, onProfile, onResetData, familyId, exp, streak 
             <div key={key} className={`flex items-center gap-3 px-5 py-4${i<arr.length-1?" border-b border-[#111827]/06":""}`}>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-[#111827]">{label}</p>
-                <p className="text-[11px] text-[#111827]/38 mt-0.5">{sub}</p>
+                <p className="text-[13px] text-[#111827]/58 mt-0.5">{sub}</p>
               </div>
               <SettingsToggle value={!!cfg[key]} onChange={() => toggle(key)}/>
             </div>
@@ -4927,7 +5046,7 @@ function SettingsScreen({ onBack, onProfile, onResetData, familyId, exp, streak 
 
       {/* ── 앱 설정 ── */}
       <div>
-        <p className="text-[11px] font-mono text-[#111827]/35 uppercase tracking-[0.3em] mb-3 px-1">앱 설정</p>
+        <p className="text-[13px] font-mono text-[#111827]/55 uppercase tracking-[0.3em] mb-3 px-1">앱 설정</p>
         <div className={`${T.glassCard} rounded-3xl overflow-hidden`} style={{ boxShadow:T.cardShadow }}>
           {([
             { label:"효과음",    sub:"버튼·완료 효과음", key:"sound"       as keyof SettingsState },
@@ -4938,7 +5057,7 @@ function SettingsScreen({ onBack, onProfile, onResetData, familyId, exp, streak 
             <div key={key} className={`flex items-center gap-3 px-5 py-4${i<arr.length-1?" border-b border-[#111827]/06":""}`}>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-[#111827]">{label}</p>
-                <p className="text-[11px] text-[#111827]/38 mt-0.5">{sub}</p>
+                <p className="text-[13px] text-[#111827]/58 mt-0.5">{sub}</p>
               </div>
               <SettingsToggle value={!!cfg[key]} onChange={() => toggle(key)}/>
             </div>
@@ -4948,7 +5067,7 @@ function SettingsScreen({ onBack, onProfile, onResetData, familyId, exp, streak 
 
       {/* ── 학습 설정 ── */}
       <div>
-        <p className="text-[11px] font-mono text-[#111827]/35 uppercase tracking-[0.3em] mb-3 px-1">학습 설정</p>
+        <p className="text-[13px] font-mono text-[#111827]/55 uppercase tracking-[0.3em] mb-3 px-1">학습 설정</p>
         <div className={`${T.glassCard} rounded-3xl overflow-hidden`} style={{ boxShadow:T.cardShadow }}>
 
           {/* 공부 알림 시간 */}
@@ -4956,10 +5075,10 @@ function SettingsScreen({ onBack, onProfile, onResetData, familyId, exp, streak 
             <div className="flex items-center gap-3 cursor-pointer" onClick={() => setEditingTime(v => !v)}>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-[#111827]">공부 알림 시간</p>
-                <p className="text-[11px] text-[#111827]/38 mt-0.5">매일 알림</p>
+                <p className="text-[13px] text-[#111827]/58 mt-0.5">매일 알림</p>
               </div>
               <span className="text-sm font-bold text-[#2563EB]">{cfg.studyReminder}</span>
-              <ChevronRight className={`w-4 h-4 text-[#111827]/25 transition-transform${editingTime?" rotate-90":""}`}/>
+              <ChevronRight className={`w-4 h-4 text-[#111827]/45 transition-transform${editingTime?" rotate-90":""}`}/>
             </div>
             {editingTime && (
               <div className="mt-3 flex items-center gap-3">
@@ -4982,10 +5101,10 @@ function SettingsScreen({ onBack, onProfile, onResetData, familyId, exp, streak 
             <div className="flex items-center gap-3 cursor-pointer" onClick={() => setEditingDay(v => !v)}>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-[#111827]">휴식일</p>
-                <p className="text-[11px] text-[#111827]/38 mt-0.5">휴식권 자동 적용</p>
+                <p className="text-[13px] text-[#111827]/58 mt-0.5">휴식권 자동 적용</p>
               </div>
               <span className="text-sm font-bold text-[#2563EB]">{cfg.restDay}요일</span>
-              <ChevronRight className={`w-4 h-4 text-[#111827]/25 transition-transform${editingDay?" rotate-90":""}`}/>
+              <ChevronRight className={`w-4 h-4 text-[#111827]/45 transition-transform${editingDay?" rotate-90":""}`}/>
             </div>
             {editingDay && (
               <div className="mt-3 flex flex-wrap gap-2">
@@ -5007,26 +5126,27 @@ function SettingsScreen({ onBack, onProfile, onResetData, familyId, exp, streak 
 
       {/* ── 계정 ── */}
       <div>
-        <p className="text-[11px] font-mono text-[#111827]/35 uppercase tracking-[0.3em] mb-3 px-1">계정</p>
+        <p className="text-[13px] font-mono text-[#111827]/55 uppercase tracking-[0.3em] mb-3 px-1">계정</p>
         <div className={`${T.glassCard} rounded-3xl overflow-hidden`} style={{ boxShadow:T.cardShadow }}>
 
-          {/* 프로필 편집 */}
+          {/* 학습현황 보기 */}
           <button onClick={onProfile}
             className="w-full flex items-center gap-3 px-5 py-4 border-b border-[#111827]/06 hover:bg-[#F8FAFC] transition-colors text-left">
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-[#111827]">프로필 편집</p>
+              <p className="text-sm font-semibold text-[#111827]">학습현황 보기</p>
+              <p className="text-[12px] text-[#111827]/48 mt-0.5">과목별 학습 통계·기록</p>
             </div>
-            <ChevronRight className="w-4 h-4 text-[#111827]/25"/>
+            <ChevronRight className="w-4 h-4 text-[#111827]/45"/>
           </button>
 
-          {/* 목표 재설정 */}
+          {/* 레벨·기록 초기화 */}
           <button onClick={() => setConfirmReset(true)}
             className="w-full flex items-center gap-3 px-5 py-4 border-b border-[#111827]/06 hover:bg-[#F8FAFC] transition-colors text-left">
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-[#111827]">목표 재설정</p>
-              <p className="text-[11px] text-[#111827]/38 mt-0.5">EXP·스트릭 초기화</p>
+              <p className="text-sm font-semibold text-[#111827]">레벨·기록 초기화</p>
+              <p className="text-[13px] text-[#111827]/58 mt-0.5">경험치·연속 학습일을 다시 0부터 시작해요</p>
             </div>
-            <ChevronRight className="w-4 h-4 text-[#111827]/25"/>
+            <ChevronRight className="w-4 h-4 text-[#111827]/45"/>
           </button>
 
           {/* 데이터 초기화 */}
@@ -5034,7 +5154,7 @@ function SettingsScreen({ onBack, onProfile, onResetData, familyId, exp, streak 
             className="w-full flex items-center gap-3 px-5 py-4 hover:bg-[#FFF5F5] transition-colors text-left">
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold" style={{ color:"#E11D48" }}>데이터 초기화</p>
-              <p className="text-[11px] text-[#111827]/38 mt-0.5">전체 기록 삭제</p>
+              <p className="text-[13px] text-[#111827]/58 mt-0.5">전체 기록 삭제</p>
             </div>
             <ChevronRight className="w-4 h-4 text-[#E11D48]/30"/>
           </button>
@@ -5043,8 +5163,8 @@ function SettingsScreen({ onBack, onProfile, onResetData, familyId, exp, streak 
 
       {/* ── 앱 버전 ── */}
       <div className="text-center pb-4">
-        <p className="text-[11px] font-mono text-[#111827]/22">Project WOOHYUN · v1.0.0</p>
-        <p className="text-[10px] text-[#111827]/15 mt-1">Made with ❤️ for 우현</p>
+        <p className="text-[13px] font-mono text-[#111827]/42">Project WOOHYUN · v1.0.0</p>
+        <p className="text-[12px] text-[#111827]/35 mt-1">Made with ❤️ for 우현</p>
       </div>
 
       {/* ── 목표 재설정 확인 다이얼로그 ── */}
@@ -5052,19 +5172,21 @@ function SettingsScreen({ onBack, onProfile, onResetData, familyId, exp, streak 
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
           style={{ backgroundColor:"rgba(17,24,39,0.45)", backdropFilter:"blur(4px)" }}>
           <div className={`${T.glassCard} rounded-3xl p-6 w-full max-w-sm`} style={{ boxShadow:"0 24px 64px rgba(17,24,39,0.22)" }}>
-            <h3 className="font-bold text-[#111827] text-base mb-2">목표 재설정</h3>
-            <p className="text-sm text-[#111827]/55 mb-5 leading-relaxed">
-              EXP, 스트릭, 마지막 학습일이 초기화돼요.<br/>미션 기록은 유지됩니다.
+            <h3 className="font-bold text-[#111827] text-base mb-2">레벨·기록 초기화</h3>
+            <p className="text-sm text-[#111827]/72 mb-5 leading-relaxed">
+              <b>경험치(EXP)</b> — 미션을 완료할 때마다 쌓여서 레벨을 올려주는 점수예요.<br/>
+              <b>스트릭</b> — 며칠 연속으로 공부했는지 세는 연속 기록이에요.<br/><br/>
+              이 둘을 0으로 되돌리고 레벨도 Lv.1부터 다시 시작해요.<br/>지금까지의 미션 완료 기록(달력·통계)은 그대로 남아요.
             </p>
             <div className="flex gap-3">
               <button onClick={() => setConfirmReset(false)}
-                className="flex-1 py-3 rounded-2xl text-sm font-bold text-[#111827]/55 border-2 border-[#E5E7EB] hover:bg-[#F8FAFC] transition-colors">
+                className="flex-1 py-3 rounded-2xl text-sm font-bold text-[#111827]/72 border-2 border-[#E5E7EB] hover:bg-[#F8FAFC] transition-colors">
                 취소
               </button>
               <button onClick={handleResetGoal}
                 className="flex-1 py-3 rounded-2xl text-sm font-bold text-white"
                 style={{ background:`linear-gradient(135deg,${T.blue},${T.indigo})` }}>
-                재설정
+                초기화
               </button>
             </div>
           </div>
@@ -5077,13 +5199,13 @@ function SettingsScreen({ onBack, onProfile, onResetData, familyId, exp, streak 
           style={{ backgroundColor:"rgba(17,24,39,0.45)", backdropFilter:"blur(4px)" }}>
           <div className={`${T.glassCard} rounded-3xl p-6 w-full max-w-sm`} style={{ boxShadow:"0 24px 64px rgba(17,24,39,0.22)" }}>
             <h3 className="font-bold text-[#E11D48] text-base mb-2">전체 데이터 초기화</h3>
-            <p className="text-sm text-[#111827]/55 mb-5 leading-relaxed">
+            <p className="text-sm text-[#111827]/72 mb-5 leading-relaxed">
               모든 학습 기록, EXP, 스트릭이 삭제돼요.<br/>
               <span className="font-bold text-[#E11D48]">이 작업은 되돌릴 수 없습니다.</span>
             </p>
             <div className="flex gap-3">
               <button onClick={() => setConfirmClearData(false)}
-                className="flex-1 py-3 rounded-2xl text-sm font-bold text-[#111827]/55 border-2 border-[#E5E7EB] hover:bg-[#F8FAFC] transition-colors">
+                className="flex-1 py-3 rounded-2xl text-sm font-bold text-[#111827]/72 border-2 border-[#E5E7EB] hover:bg-[#F8FAFC] transition-colors">
                 취소
               </button>
               <button onClick={handleClearData}
@@ -5170,7 +5292,7 @@ function AdminDashboardScreen({ exp, streak, history, dayPlans, onCalendar, onSc
           style={{ background:"linear-gradient(135deg,#1E293B,#334155)" }}>👤</div>
         <div>
           <p className="font-bold text-[#111827] text-base">우현이 학습 현황</p>
-          <p className="text-[#111827]/42 text-[12px]">7.21 ~ 10.2 중간고사 대비 학습 현황 분석</p>
+          <p className="text-[#111827]/62 text-[12px]">7.21 ~ 10.2 중간고사 대비 학습 현황 분석</p>
         </div>
       </div>
 
@@ -5190,7 +5312,7 @@ function AdminDashboardScreen({ exp, streak, history, dayPlans, onCalendar, onSc
             </div>
             <div>
               <p className="text-base font-bold text-[#111827] leading-tight">{value}</p>
-              <p className="text-[10px] text-[#111827]/45 mt-0.5">{label}</p>
+              <p className="text-[12px] text-[#111827]/65 mt-0.5">{label}</p>
             </div>
           </div>
         ))}
@@ -5198,7 +5320,7 @@ function AdminDashboardScreen({ exp, streak, history, dayPlans, onCalendar, onSc
 
       {/* Subject completion */}
       <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
-        <p className="text-[11px] font-mono text-[#111827]/28 uppercase tracking-[0.35em] mb-2">과목별</p>
+        <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">과목별</p>
         <h3 className="font-bold text-[#111827] text-[1.02rem] mb-4">과목별 완료율</h3>
         <div className="space-y-4">
           {subjectStats.map(({ id, name, done, total, time, color, icon:Icon }) => {
@@ -5211,8 +5333,8 @@ function AdminDashboardScreen({ exp, streak, history, dayPlans, onCalendar, onSc
                     <span className="text-sm font-bold text-[#111827]">{name}</span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-[11px] text-[#111827]/40">{done}/{total}일 · {time}분씩</span>
-                    <span className="text-[11px] font-bold" style={{ color }}>{pct}%</span>
+                    <span className="text-[13px] text-[#111827]/60">{done}/{total}일 · {time}분씩</span>
+                    <span className="text-[13px] font-bold" style={{ color }}>{pct}%</span>
                   </div>
                 </div>
                 <div className="h-2 bg-[#E2E8F0] rounded-full overflow-hidden">
@@ -5226,7 +5348,7 @@ function AdminDashboardScreen({ exp, streak, history, dayPlans, onCalendar, onSc
 
       {/* Weekly XP bar chart */}
       <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
-        <p className="text-[11px] font-mono text-[#111827]/28 uppercase tracking-[0.35em] mb-2">주차별 XP</p>
+        <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">주차별 XP</p>
         <h3 className="font-bold text-[#111827] text-[1.02rem] mb-5">주차별 경험치</h3>
         <div className="flex items-end justify-between gap-2" style={{ height:90 }}>
           {weeklyXP.map(({ week, xp, start, end }, i)=>{
@@ -5234,7 +5356,7 @@ function AdminDashboardScreen({ exp, streak, history, dayPlans, onCalendar, onSc
             const isCurrent = diffDaysStr(start, todayStr) >= 0 && diffDaysStr(todayStr, end) >= 0;
             return (
               <div key={week} className="flex-1 flex flex-col items-center gap-2">
-                <span className="text-[9px] font-mono text-[#111827]/28">{xp>0?xp:""}</span>
+                <span className="text-[11px] font-mono text-[#111827]/48">{xp>0?xp:""}</span>
                 <div className="w-full flex items-end" style={{ height:82 }}>
                   <div className="w-full rounded-xl"
                     style={{ height:h, background: isCurrent
@@ -5242,7 +5364,7 @@ function AdminDashboardScreen({ exp, streak, history, dayPlans, onCalendar, onSc
                       : xp>0 ? `linear-gradient(to top,${T.green},#34D399)` : "rgba(17,24,39,0.08)",
                       transition:`height 0.6s ${i*0.08}s ease` }}/>
                 </div>
-                <span className="text-[11px] font-semibold" style={{ color:isCurrent?T.blue:xp>0?"rgba(17,24,39,0.45)":"rgba(17,24,39,0.22)" }}>{week}</span>
+                <span className="text-[13px] font-semibold" style={{ color:isCurrent?T.blue:xp>0?"rgba(17,24,39,0.45)":"rgba(17,24,39,0.22)" }}>{week}</span>
               </div>
             );
           })}
@@ -5251,7 +5373,7 @@ function AdminDashboardScreen({ exp, streak, history, dayPlans, onCalendar, onSc
 
       {/* 캘린더 / 일정표 바로가기 */}
       <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
-        <p className="text-[11px] font-mono text-[#111827]/28 uppercase tracking-[0.35em] mb-2">더 보기</p>
+        <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">더 보기</p>
         <h3 className="font-bold text-[#111827] text-[1.02rem] mb-4">일별 현황 자세히 보기</h3>
         <div className="grid grid-cols-2 gap-3">
           <button onClick={onCalendar}
@@ -5309,27 +5431,27 @@ function ScheduleRow({ day, history, dayPlans, todayStr }: {
       }}>
       <div className="w-11 flex-shrink-0 text-center">
         <p className="text-[15px] font-bold text-[#111827] leading-none">{parsed.getDate()}</p>
-        <p className="text-[10px] text-[#111827]/35 mt-1">{CAL_DOW[day.dow]}</p>
+        <p className="text-[12px] text-[#111827]/55 mt-1">{CAL_DOW[day.dow]}</p>
       </div>
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap mb-1">
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor:kindBadge.bg, color:kindBadge.color }}>
+          <span className="text-[12px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor:kindBadge.bg, color:kindBadge.color }}>
             {kindBadge.label}
           </span>
-          {isToday && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#2563EB] text-white">오늘</span>}
+          {isToday && <span className="text-[12px] font-bold px-2 py-0.5 rounded-full bg-[#2563EB] text-white">오늘</span>}
         </div>
 
         {day.kind === "study" ? (
           assigned.length === 0 ? (
-            <p className="text-[11px] text-[#111827]/30">배정된 과목 없음</p>
+            <p className="text-[13px] text-[#111827]/50">배정된 과목 없음</p>
           ) : (
           <div className="flex flex-wrap gap-1">
             {assigned.map(id => {
               const subj = EXAM_SUBJECTS.find(s => s.id === id)!;
               const ok   = done.includes(id);
               return (
-                <span key={id} className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                <span key={id} className="text-[12px] font-semibold px-2 py-0.5 rounded-full"
                   style={{
                     backgroundColor: ok ? "#D1FAE5" : isFuture ? "#F1F5F9" : "#FFF1F2",
                     color:            ok ? "#065F46" : isFuture ? "#9CA3AF" : "#9F1239",
@@ -5341,13 +5463,13 @@ function ScheduleRow({ day, history, dayPlans, todayStr }: {
           </div>
           )
         ) : shortfall.length > 0 ? (
-          <p className="text-[11px] text-[#9F1239]/80">
+          <p className="text-[13px] text-[#9F1239]/80">
             보충 필요: {shortfall.map(c => `${EXAM_SUBJECTS.find(s=>s.id===c.subjectId)?.name} ${c.missing}회`).join(", ")}
           </p>
         ) : done.length > 0 ? (
-          <p className="text-[11px] text-[#065F46]/80">보충 완료: {done.map(id => EXAM_SUBJECTS.find(s => s.id === id)?.name).filter(Boolean).join(", ")}</p>
+          <p className="text-[13px] text-[#065F46]/80">보충 완료: {done.map(id => EXAM_SUBJECTS.find(s => s.id === id)?.name).filter(Boolean).join(", ")}</p>
         ) : (
-          <p className="text-[11px] text-[#111827]/30">쉬는 날</p>
+          <p className="text-[13px] text-[#111827]/50">쉬는 날</p>
         )}
       </div>
     </div>
@@ -5373,15 +5495,15 @@ function ScheduleListScreen({ history, dayPlans }: { history:Record<string,strin
           </h1>
           <div className="flex flex-wrap gap-2">
             <div className="px-3 py-2 rounded-xl bg-white/14 border border-white/14">
-              <p className="text-[10px] text-white/50 mb-0.5">중간고사까지</p>
+              <p className="text-[12px] text-white/50 mb-0.5">중간고사까지</p>
               <p className="text-white font-bold text-sm" style={{ fontFamily:T.mono }}>{dday >= 0 ? `D-${dday}` : "당일"}</p>
             </div>
             <div className="px-3 py-2 rounded-xl bg-white/14 border border-white/14">
-              <p className="text-[10px] text-white/50 mb-0.5">공부일</p>
+              <p className="text-[12px] text-white/50 mb-0.5">공부일</p>
               <p className="text-white font-bold text-sm" style={{ fontFamily:T.mono }}>{studyDays.length}일</p>
             </div>
             <div className="px-3 py-2 rounded-xl bg-white/14 border border-white/14">
-              <p className="text-[10px] text-white/50 mb-0.5">쉬는 날(보충)</p>
+              <p className="text-[12px] text-white/50 mb-0.5">쉬는 날(보충)</p>
               <p className="text-white font-bold text-sm" style={{ fontFamily:T.mono }}>{restDays.length}일</p>
             </div>
           </div>
@@ -5427,16 +5549,16 @@ function WeeklyPlanDay({ day, dayPlans, history, isToday, onToggle }: {
           <div className="w-11 h-11 rounded-2xl flex flex-col items-center justify-center flex-shrink-0"
             style={{ backgroundColor: (isToday || isFirstDay) ? "#EFF6FF" : "#F8FAFC" }}>
             <span className="text-[13px] font-bold leading-none" style={{ color: (isToday || isFirstDay) ? T.blue : "#111827" }}>{parsed.getDate()}</span>
-            <span className="text-[9px] leading-none mt-0.5" style={{ color: (isToday || isFirstDay) ? T.blue : "#111827" }}>{CAL_DOW[day.dow]}</span>
+            <span className="text-[11px] leading-none mt-0.5" style={{ color: (isToday || isFirstDay) ? T.blue : "#111827" }}>{CAL_DOW[day.dow]}</span>
           </div>
           <div>
             <p className="font-bold text-[#111827] text-[0.95rem]">{parsed.getMonth() + 1}월 {parsed.getDate()}일</p>
-            <p className="text-[11px]" style={{ color: isFirstDay ? T.blue : "rgba(17,24,39,0.35)" }}>
+            <p className="text-[13px]" style={{ color: isFirstDay ? T.blue : "rgba(17,24,39,0.35)" }}>
               {isToday ? "오늘" : isFirstDay ? "학습 시작일" : isPast ? "지난 날" : "예정"}
             </p>
           </div>
         </div>
-        <span className="text-[12px] font-bold text-[#111827]/40">{checked.length}과목 선택</span>
+        <span className="text-[12px] font-bold text-[#111827]/60">{checked.length}과목 선택</span>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
@@ -5464,9 +5586,9 @@ function WeeklyPlanDay({ day, dayPlans, history, isToday, onToggle }: {
                 <p className="text-[12px] font-bold" style={{ color: isDone ? "#065F46" : "#111827", textDecoration: isDone ? "line-through" : "none" }}>
                   {s.name}
                 </p>
-                <p className="text-[10px] text-[#111827]/35 truncate">{pickMissionText(day.date, s.id)}</p>
+                <p className="text-[12px] text-[#111827]/55 truncate">{pickMissionText(day.date, s.id)}</p>
               </div>
-              {isDone && <span className="text-[9px] font-bold text-[#10B981] flex-shrink-0">완료</span>}
+              {isDone && <span className="text-[11px] font-bold text-[#10B981] flex-shrink-0">완료</span>}
             </button>
           );
         })}
@@ -5475,9 +5597,9 @@ function WeeklyPlanDay({ day, dayPlans, history, isToday, onToggle }: {
   );
 }
 
-function WeeklyPlanScreen({ dayPlans, history, onToggle }: {
+function WeeklyPlanScreen({ dayPlans, history, onToggle, onDone }: {
   dayPlans:DayPlanOverrides; history:Record<string,string[]>;
-  onToggle:(date:string, subjectId:string)=>void;
+  onToggle:(date:string, subjectId:string)=>void; onDone:()=>void;
 }) {
   const todayStr  = toYMD(new Date());
   const { start } = getWeekRange(todayStr);
@@ -5490,7 +5612,8 @@ function WeeklyPlanScreen({ dayPlans, history, onToggle }: {
   const rangeLabel = `${ps.getMonth() + 1}/${ps.getDate()} ~ ${pe.getMonth() + 1}/${pe.getDate()}`;
 
   return (
-    <main className="max-w-[720px] mx-auto px-4 sm:px-6 py-6 pb-16 space-y-5">
+    <>
+    <main className="max-w-[720px] mx-auto px-4 sm:px-6 py-6 pb-28 space-y-5">
       <div className="relative rounded-3xl overflow-hidden p-6 sm:p-8" style={{ background:T.heroGrad, boxShadow:T.heroShadow }}>
         <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-white/5 pointer-events-none"/>
         <div className="relative z-10">
@@ -5500,7 +5623,7 @@ function WeeklyPlanScreen({ dayPlans, history, onToggle }: {
           </h1>
           <div className="flex flex-wrap gap-2">
             <div className="px-3 py-2 rounded-xl bg-white/14 border border-white/14">
-              <p className="text-[10px] text-white/50 mb-0.5">이번 주 공부일</p>
+              <p className="text-[12px] text-white/50 mb-0.5">이번 주 공부일</p>
               <p className="text-white font-bold text-sm" style={{ fontFamily:T.mono }}>{studyDays.length}일</p>
             </div>
           </div>
@@ -5520,6 +5643,17 @@ function WeeklyPlanScreen({ dayPlans, history, onToggle }: {
           isToday={day.date === todayStr} onToggle={onToggle}/>
       ))}
     </main>
+    <div className="fixed bottom-0 left-0 right-0 z-40 backdrop-blur-2xl bg-white/90 border-t border-black/[0.06]"
+      style={{ paddingBottom:"env(safe-area-inset-bottom)", boxShadow:"0 -4px 28px rgba(17,24,39,0.08)" }}>
+      <div className="max-w-[720px] mx-auto px-4 sm:px-6 py-3">
+        <button onClick={onDone}
+          className="cta-btn w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-white font-bold text-sm"
+          style={{ background:`linear-gradient(135deg,${T.blue},${T.indigo})`, boxShadow:"0 6px 24px rgba(37,99,235,0.35)" }}>
+          <Check className="w-4 h-4"/> 확인
+        </button>
+      </div>
+    </div>
+    </>
   );
 }
 
@@ -5546,7 +5680,7 @@ function GoalScoreSummaryCard({ goals, onClick }: { goals:Record<string, number>
           </div>
           <div>
             <p className="text-sm font-bold text-[#312E81]">2학기 중간고사 목표점수</p>
-            <p className="text-[11px] text-[#4338CA]/50">기말고사 성적표 기반으로 정해보자</p>
+            <p className="text-[13px] text-[#4338CA]/50">기말고사 성적표 기반으로 정해보자</p>
           </div>
         </div>
         <p className="text-[#312E81]/80 text-[0.85rem] leading-relaxed mb-4">
@@ -5555,7 +5689,7 @@ function GoalScoreSummaryCard({ goals, onClick }: { goals:Record<string, number>
         <div className="grid grid-cols-3 gap-2 mb-4">
           {EXAM_SUBJECTS.map(s => (
             <div key={s.id} className="flex flex-col items-center gap-0.5 py-2.5 rounded-xl bg-white/60">
-              <span className="text-[10px] font-semibold text-[#4338CA]/55">{s.name}</span>
+              <span className="text-[12px] font-semibold text-[#4338CA]/55">{s.name}</span>
               <span className="text-[1.15rem] font-extrabold leading-none" style={{ color:scoreTierColor(s.examScore) }}>{s.examScore}</span>
             </div>
           ))}
@@ -5584,13 +5718,13 @@ function GoalScoreCard({ subject, goal, onChange }: {
           </div>
           <div>
             <p className="font-bold text-[#111827] text-[0.9rem] leading-tight">{subject.name}</p>
-            <p className="text-[10px] text-[#111827]/35 mt-0.5">기말고사 점수</p>
+            <p className="text-[12px] text-[#111827]/55 mt-0.5">기말고사 점수</p>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <span className="text-[1.5rem] font-extrabold leading-none" style={{ color:tierColor }}>{subject.examScore}</span>
           {needsFocus && (
-            <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-[#FEE2E2] text-[#DC2626]">집중 필요</span>
+            <span className="text-[12px] font-bold px-2 py-1 rounded-full bg-[#FEE2E2] text-[#DC2626]">집중 필요</span>
           )}
         </div>
       </div>
@@ -5603,10 +5737,10 @@ function GoalScoreCard({ subject, goal, onChange }: {
         />
         <div className="w-14 text-right flex-shrink-0">
           <span className="text-lg font-bold" style={{ color:subject.color }}>{goal}</span>
-          <span className="text-[11px] text-[#111827]/35">점</span>
+          <span className="text-[13px] text-[#111827]/55">점</span>
         </div>
       </div>
-      <p className="text-[11px] text-[#111827]/40 mt-2">
+      <p className="text-[13px] text-[#111827]/60 mt-2">
         {diff > 0 ? `현재보다 +${diff}점 목표` : "지금 점수 유지하기"}
       </p>
     </div>
@@ -5629,7 +5763,7 @@ function GoalSettingScreen({ goals, onChange, onSave }: {
           <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
             {EXAM_SUBJECTS.map(s => (
               <div key={s.id} className="flex flex-col items-center gap-1 py-3 rounded-2xl bg-white/12 border border-white/14">
-                <span className="text-[11px] font-semibold text-white/60">{s.name}</span>
+                <span className="text-[13px] font-semibold text-white/60">{s.name}</span>
                 <span className="text-[1.4rem] font-extrabold leading-none text-white">{s.examScore}</span>
               </div>
             ))}
@@ -5699,7 +5833,7 @@ function ScheduleStatusBanner({
     return (
       <div className="rounded-3xl p-5" style={{ background:"linear-gradient(140deg,#FFFBEB,#FEF3C7)", boxShadow:"0 4px 28px rgba(245,158,11,0.14)" }}>
         <p className="text-[13px] font-bold text-[#92400E] mb-1">오늘은 보충학습 하는 날이에요</p>
-        <p className="text-[11px] text-[#92400E]/65 mb-3.5">이번 주에 못한 과목을 오늘 채워볼까?</p>
+        <p className="text-[13px] text-[#92400E]/65 mb-3.5">이번 주에 못한 과목을 오늘 채워볼까?</p>
         <div className="flex flex-wrap gap-2">
           {catchupSubjects.map(s => (
             <button key={s.id} onClick={() => onStartCatchup(s.id)}
@@ -5770,7 +5904,7 @@ const SCREEN_TITLES: Partial<Record<Screen, string>> = {
   "mom-dashboard":     "엄마 대시보드",
   "notifications":     "알림 센터",
   "settings":          "설정",
-  "admin":             "관리자",
+  "admin":             "학습현황",
   "goal-setting":      "2학기 중간고사 목표점수",
   "schedule-list":     "전체 일정표",
   "weekly-plan":       "이번 주 계획",
@@ -5998,7 +6132,7 @@ export default function App() {
           style={{ background:`linear-gradient(135deg,${T.blue},${T.indigo})` }}>
           <span className="text-white text-sm font-bold">W</span>
         </div>
-        <p className="text-[#111827]/40 text-sm">불러오는 중...</p>
+        <p className="text-[#111827]/60 text-sm">불러오는 중...</p>
       </div>
     );
   }
@@ -6051,7 +6185,7 @@ export default function App() {
           <MissionDetailScreen subjectId={selectedId} missionText={selectedMissionText} onStart={()=>goTo("focus")} onBack={()=>goTo("select")}/>
         )}
         {screen === "focus" && (
-          <FocusScreen subjectId={selectedId} missionText={selectedMissionText} onComplete={()=>goTo("photo")} onBack={()=>goTo("mission")}/>
+          <FocusScreen subjectId={selectedId} missionText={selectedMissionText} onComplete={()=>goTo("photo")} onBack={()=>goTo("mission")} goalScore={goalScores[selectedId]}/>
         )}
         {screen === "photo" && (
           <PhotoScreen subjectId={selectedId} missionText={selectedMissionText} onSubmit={handleMissionComplete} onBack={()=>goTo("focus")}/>
@@ -6144,7 +6278,7 @@ export default function App() {
           <GoalSettingScreen goals={goalScores} onChange={handleGoalChange} onSave={()=>goTo("home")}/>
         )}
         {screen === "weekly-plan" && (
-          <WeeklyPlanScreen dayPlans={dayPlans} history={history} onToggle={toggleDaySubject}/>
+          <WeeklyPlanScreen dayPlans={dayPlans} history={history} onToggle={toggleDaySubject} onDone={()=>goTo("home")}/>
         )}
 
         {showNav && (
