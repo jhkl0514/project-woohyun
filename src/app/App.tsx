@@ -64,22 +64,22 @@ type ExamSubject = {
 // 기말고사 성적표 기반 과목 마스터 — 목표점수 화면과 주간 학습 계획이 모두 이 데이터를 공유
 const EXAM_SUBJECTS: ExamSubject[] = [
   { id:"kor",  name:"국어",   sub:"Korean",  icon:BookOpen,  color:T.indigo, bg:"#EEF2FF", examScore:96,
-    reviewType:"review",  weeklyTarget:2, time:20, difficulty:2, exp:20,
+    reviewType:"review",  weeklyTarget:2, time:20, difficulty:2, exp:200,
     missionPool:["1학기 문학 작품 다시 읽기", "1학기 문법 개념 정리", "1학기 독해 지문 오답노트"] },
   { id:"math", name:"수학",   sub:"Math",    icon:Target,    color:T.blue,   bg:"#EFF6FF", examScore:31,
-    reviewType:"review",  weeklyTarget:5, time:25, difficulty:3, exp:30,
+    reviewType:"review",  weeklyTarget:5, time:25, difficulty:3, exp:300,
     missionPool:["1학기 이차방정식 복습", "1학기 도형 단원 오답노트 정리", "1학기 함수 그래프 복습", "도형 문제 5개 풀기", "1학기 연립방정식 복습"] },
   { id:"en",   name:"영어",   sub:"English", icon:Globe,     color:T.violet, bg:"#EDE9FE", examScore:80,
-    reviewType:"preview", weeklyTarget:3, time:20, difficulty:2, exp:20,
+    reviewType:"preview", weeklyTarget:3, time:20, difficulty:2, exp:200,
     missionPool:["2학기 1과 단어 예습", "2학기 1과 대화문 미리 읽기", "독해 지문 2개 풀기"] },
   { id:"sci",  name:"과학",   sub:"Science", icon:Zap,       color:T.green,  bg:"#D1FAE5", examScore:53,
-    reviewType:"review",  weeklyTarget:3, time:30, difficulty:3, exp:30,
+    reviewType:"review",  weeklyTarget:3, time:30, difficulty:3, exp:300,
     missionPool:["1학기 세포 분열 정리노트", "1학기 원소기호 복습", "1학기 실험 단원 오답노트"] },
   { id:"hist", name:"역사",   sub:"History", icon:Landmark,  color:T.amber,  bg:"#FEF3C7", examScore:51,
-    reviewType:"review",  weeklyTarget:3, time:20, difficulty:2, exp:20,
+    reviewType:"review",  weeklyTarget:3, time:20, difficulty:2, exp:200,
     missionPool:["1학기 조선시대 핵심 요약", "1학기 근현대사 연표 정리", "1학기 인물사 복습"] },
   { id:"eth",  name:"도덕",   sub:"Ethics",  icon:Heart,     color:T.pink,   bg:"#FCE7F3", examScore:73,
-    reviewType:"preview", weeklyTarget:2, time:15, difficulty:1, exp:15,
+    reviewType:"preview", weeklyTarget:2, time:15, difficulty:1, exp:150,
     missionPool:["2학기 1단원 미리 읽기", "2학기 핵심 개념 예습"] },
 ];
 
@@ -283,7 +283,7 @@ function buildTodayStudySubjects(date: string, dayPlans: DayPlanOverrides, histo
 // ─── 레벨 & 배지 (실제 학습 기록 기반) ──────────────────────────────────────────
 // XP를 모으면 레벨이 오르고, 나무가 자라요. 배지는 우현이의 노력을 보여주는 기록.
 
-const LEVEL_XP_TABLE   = [0, 200, 450, 750, 1100, 1500, 2000, 2600, 3300, 4100, 5000];
+const LEVEL_XP_TABLE   = [0, 2000, 4500, 7500, 11000, 15000, 20000, 26000, 33000, 41000, 50000];
 const LEVEL_TREE_NAMES = ["씨앗","새싹","잎사귀","어린나무","작은나무","푸른나무","큰나무","꽃나무","열매나무","고목"];
 
 function getLevelInfo(xp: number) {
