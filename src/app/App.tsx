@@ -3635,11 +3635,17 @@ function AllowanceCard({ availableAllowance, pending, onRequest, onConfirmPayout
         <>
           <p className="text-[#78350F] text-[2rem] font-extrabold leading-none mb-1">{availableAllowance.toLocaleString()}원</p>
           <p className="text-[13px] text-[#92400E]/70 mb-4">지금까지 모은 용돈</p>
-          <button onClick={onRequest} disabled={availableAllowance <= 0}
-            className="w-full py-3 rounded-2xl text-white font-bold text-sm disabled:opacity-40"
-            style={{ background:"linear-gradient(135deg,#D97706,#B45309)" }}>
-            용돈 요청하기
-          </button>
+          {isParent ? (
+            <div className="w-full py-3 rounded-2xl text-center text-[13px] font-semibold text-[#92400E]/60 border-2 border-dashed border-[#D97706]/30">
+              아이가 요청하면 여기 알림이 와요
+            </div>
+          ) : (
+            <button onClick={onRequest} disabled={availableAllowance <= 0}
+              className="w-full py-3 rounded-2xl text-white font-bold text-sm disabled:opacity-40"
+              style={{ background:"linear-gradient(135deg,#D97706,#B45309)" }}>
+              용돈 요청하기
+            </button>
+          )}
         </>
       )}
 
@@ -5075,10 +5081,12 @@ type SettingsState = {
 const LS_SETTINGS = "wh-settings-v1";
 const DAYS_KR = ["월","화","수","목","금","토","일"];
 
-function SettingsScreen({ onBack, onProfile, onResetData, familyId, exp, streak, deviceRole, onChangeRole }: {
+function SettingsScreen({ onBack, onProfile, onResetData, familyId, exp, streak, deviceRole, parentPinHash, onSelectChildRole, onSelectParentRole }: {
   onBack:()=>void; onProfile?:()=>void; onResetData?:()=>void; familyId:string;
-  exp:number; streak:number; deviceRole:DeviceRole; onChangeRole:(role:DeviceRole)=>void;
+  exp:number; streak:number; deviceRole:DeviceRole; parentPinHash:string | null;
+  onSelectChildRole:()=>void; onSelectParentRole:(hash:string)=>void;
 }) {
+  const [showPin, setShowPin] = useState(false);
   const lvl = getLevelInfo(exp);
   const todayStr = toYMD(new Date());
   const totalDays = FULL_SCHEDULE.length;
@@ -5138,6 +5146,7 @@ function SettingsScreen({ onBack, onProfile, onResetData, familyId, exp, streak,
   };
 
   return (
+    <>
     <main className="max-w-[600px] mx-auto px-4 sm:px-5 pt-5 pb-16 space-y-6">
 
       {/* ── 프로필 카드 ── */}
@@ -5190,7 +5199,7 @@ function SettingsScreen({ onBack, onProfile, onResetData, familyId, exp, streak,
         <p className="font-bold text-[#111827] text-sm mb-1">이 폰은 누구 거예요?</p>
         <p className="text-[13px] text-[#111827]/55 mb-3">용돈 지급 완료 버튼 등 일부 기능이 달라져요</p>
         <div className="flex gap-2">
-          <button onClick={() => onChangeRole("child")}
+          <button onClick={onSelectChildRole}
             className="flex-1 py-3 rounded-2xl font-bold text-sm transition-all"
             style={{
               background: deviceRole === "child" ? `linear-gradient(135deg,${T.blue},${T.indigo})` : "#F1F5F9",
@@ -5198,7 +5207,7 @@ function SettingsScreen({ onBack, onProfile, onResetData, familyId, exp, streak,
             }}>
             🧒 아이 폰
           </button>
-          <button onClick={() => onChangeRole("parent")}
+          <button onClick={() => deviceRole !== "parent" && setShowPin(true)}
             className="flex-1 py-3 rounded-2xl font-bold text-sm transition-all"
             style={{
               background: deviceRole === "parent" ? "linear-gradient(135deg,#D97706,#B45309)" : "#F1F5F9",
@@ -5404,6 +5413,15 @@ function SettingsScreen({ onBack, onProfile, onResetData, familyId, exp, streak,
         </div>
       )}
     </main>
+    {showPin && (
+      <PinPrompt
+        mode={parentPinHash ? "verify" : "create"}
+        verifyHash={parentPinHash}
+        onCancel={() => setShowPin(false)}
+        onSuccess={(hash) => { onSelectParentRole(hash); setShowPin(false); }}
+      />
+    )}
+    </>
   );
 }
 
@@ -5826,7 +5844,7 @@ function WeeklyPlanDay({ day, dayPlans, history, isToday, onToggle }: {
         {EXAM_SUBJECTS.map(s => {
           const isChecked = checked.includes(s.id);
           const isDone    = done.includes(s.id);
-          const disabled  = isPast; // 지난 날은 결과만 보여주고 수정은 막음
+          const disabled  = isPast || isDone; // 지난 날, 이미 완료한 과목은 결과만 보여주고 수정은 막음
           return (
             <button key={s.id} onClick={() => !disabled && onToggle(day.date, s.id)} disabled={disabled}
               className="flex items-center gap-2.5 p-3 rounded-2xl border text-left transition-all tap-scale"
@@ -6209,6 +6227,7 @@ const LS_STUDY_LOG = "wh-study-log-v1";
 type AllowanceRequest = { amount: number; requestedAt: string };
 type DeviceRole = "child" | "parent";
 const LS_DEVICE_ROLE = "wh-device-role-v1"; // 이 기기(브라우저)가 아이 폰인지 부모 폰인지 — 로그인이 아니라 기기별 표시일 뿐, 클라우드 동기화 대상 아님
+const LS_PARENT_PIN = "wh-parent-pin-hash-v1"; // 부모 모드로 바꿀 때 필요한 PIN의 해시 — 가족 전체가 공유(클라우드 동기화)
 type StudyLogEntry = { subjectId:string; missionText:string; elapsedSeconds:number; photoDataUrl:string; completedAt:string };
 type StudyLog = Record<string, StudyLogEntry[]>;
 
@@ -6241,6 +6260,13 @@ function formatDuration(seconds: number): string {
   return s > 0 ? `${m}분 ${s}초` : `${m}분`;
 }
 
+/** PIN을 그대로 저장하지 않고 해시로 저장 — 가족이 공유하는 클라우드 데이터에 들어가기 때문 */
+async function hashPin(pin: string): Promise<string> {
+  const data = new TextEncoder().encode(`woohyun-pin-${pin}`);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
 function loadLS<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
@@ -6249,34 +6275,128 @@ function loadLS<T>(key: string, fallback: T): T {
   return fallback;
 }
 
-// ── 최초 접속 시 "이 기기는 누구 거예요?" — 로그인이 아니라 이 브라우저에만 남는 표시 ──
-function RoleSelectScreen({ onSelect }: { onSelect:(role:DeviceRole)=>void }) {
+// ── 부모 PIN 입력/생성 모달 — "부모님 폰"으로 바꾸려면 항상 이걸 통과해야 한다 ──
+function PinPrompt({ mode, verifyHash, onCancel, onSuccess }: {
+  mode:"create" | "verify"; verifyHash?:string | null;
+  onCancel:()=>void; onSuccess:(hash:string)=>void;
+}) {
+  const [step, setStep] = useState<"enter" | "confirm">("enter");
+  const [pin, setPin] = useState("");
+  const [firstPin, setFirstPin] = useState("");
+  const [error, setError] = useState("");
+  const [checking, setChecking] = useState(false);
+
+  const handleDigit = (d: string) => {
+    if (checking || pin.length >= 4) return;
+    const next = pin + d;
+    setPin(next);
+    setError("");
+    if (next.length < 4) return;
+
+    if (mode === "create") {
+      if (step === "enter") {
+        setFirstPin(next);
+        setStep("confirm");
+        setPin("");
+      } else if (next === firstPin) {
+        setChecking(true);
+        hashPin(next).then(onSuccess);
+      } else {
+        setError("PIN이 서로 달라요. 처음부터 다시 입력해주세요.");
+        setStep("enter");
+        setFirstPin("");
+        setPin("");
+      }
+    } else {
+      setChecking(true);
+      hashPin(next).then(h => {
+        if (h === verifyHash) { onSuccess(h); return; }
+        setError("PIN이 맞지 않아요.");
+        setPin("");
+        setChecking(false);
+      });
+    }
+  };
+
+  const title = mode === "create" ? (step === "enter" ? "부모님 PIN 만들기" : "PIN 다시 입력해서 확인") : "부모님 PIN 입력";
+  const desc  = mode === "create"
+    ? "4자리 숫자를 정해주세요. 앞으로 이 폰이나 다른 폰을 부모님 모드로 바꿀 때 필요해요."
+    : "이 폰을 부모님 모드로 바꾸려면 PIN을 입력하세요.";
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-6 px-6" style={{ backgroundColor:T.bg, fontFamily:T.font }}>
-      <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-1"
-        style={{ background:`linear-gradient(135deg,${T.blue},${T.indigo})` }}>
-        <span className="text-white text-xl font-bold">W</span>
-      </div>
-      <div className="text-center">
-        <h1 className="text-xl font-bold text-[#111827] mb-2">이 폰은 누가 쓰나요?</h1>
-        <p className="text-[#111827]/55 text-sm leading-relaxed">
-          로그인은 아니고, 이 폰에서만 기억하는 표시예요.<br/>용돈 지급 확인 같은 버튼이 다르게 보여요.
-        </p>
-      </div>
-      <div className="w-full max-w-xs space-y-3 mt-2">
-        <button onClick={() => onSelect("child")}
-          className="w-full py-5 rounded-3xl flex flex-col items-center gap-1 text-white font-bold"
-          style={{ background:`linear-gradient(135deg,${T.blue},${T.indigo})`, boxShadow:"0 8px 32px rgba(37,99,235,0.3)" }}>
-          <span className="text-2xl">🧒</span> 아이 폰이에요
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ backgroundColor:"rgba(17,24,39,0.55)", backdropFilter:"blur(4px)" }}>
+      <div className={`${T.glassCard} rounded-3xl p-6 w-full max-w-sm`} style={{ boxShadow:"0 24px 64px rgba(17,24,39,0.3)" }}>
+        <h3 className="font-bold text-[#111827] text-base mb-1 text-center">{title}</h3>
+        <p className="text-[13px] text-[#111827]/55 mb-5 text-center leading-relaxed">{desc}</p>
+        <div className="flex items-center justify-center gap-3 mb-3">
+          {[0,1,2,3].map(i => (
+            <div key={i} className="w-4 h-4 rounded-full border-2"
+              style={{ backgroundColor: i < pin.length ? T.indigo : "transparent", borderColor: T.indigo }}/>
+          ))}
+        </div>
+        <p className="text-center text-[13px] text-[#DC2626] font-semibold mb-3 h-[18px]">{error}</p>
+        <div className="grid grid-cols-3 gap-2 mb-4">
+          {["1","2","3","4","5","6","7","8","9","","0","⌫"].map((k,i) => (
+            k === "" ? <div key={i}/> : (
+              <button key={i} disabled={checking}
+                onClick={() => k === "⌫" ? setPin(p => p.slice(0,-1)) : handleDigit(k)}
+                className="py-3.5 rounded-2xl text-lg font-bold text-[#111827] bg-[#F1F5F9] hover:bg-[#E2E8F0] transition-colors disabled:opacity-40">
+                {k}
+              </button>
+            )
+          ))}
+        </div>
+        <button onClick={onCancel}
+          className="w-full py-3 rounded-2xl text-sm font-bold text-[#111827]/60 border-2 border-[#E5E7EB] hover:bg-[#F8FAFC] transition-colors">
+          취소
         </button>
-        <button onClick={() => onSelect("parent")}
-          className="w-full py-5 rounded-3xl flex flex-col items-center gap-1 font-bold text-[#78350F]"
-          style={{ background:"linear-gradient(135deg,#FEF3C7,#FDE68A)", boxShadow:"0 8px 32px rgba(217,119,6,0.2)" }}>
-          <span className="text-2xl">👪</span> 부모님 폰이에요
-        </button>
       </div>
-      <p className="text-[#111827]/32 text-[12px] mt-2">나중에 설정에서 언제든 바꿀 수 있어요</p>
     </div>
+  );
+}
+
+// ── 최초 접속 시 "이 기기는 누구 거예요?" — 로그인이 아니라 이 브라우저에만 남는 표시 ──
+// 부모님 모드는 PIN을 통과해야만 선택할 수 있다 (아이가 설정에서 마음대로 바꾸는 걸 막기 위함)
+function RoleSelectScreen({ parentPinHash, onSelectChild, onSelectParent }: {
+  parentPinHash:string | null; onSelectChild:()=>void; onSelectParent:(hash:string)=>void;
+}) {
+  const [showPin, setShowPin] = useState(false);
+  return (
+    <>
+      <div className="min-h-screen flex flex-col items-center justify-center gap-6 px-6" style={{ backgroundColor:T.bg, fontFamily:T.font }}>
+        <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-1"
+          style={{ background:`linear-gradient(135deg,${T.blue},${T.indigo})` }}>
+          <span className="text-white text-xl font-bold">W</span>
+        </div>
+        <div className="text-center">
+          <h1 className="text-xl font-bold text-[#111827] mb-2">이 폰은 누가 쓰나요?</h1>
+          <p className="text-[#111827]/55 text-sm leading-relaxed">
+            로그인은 아니고, 이 폰에서만 기억하는 표시예요.<br/>용돈 지급 완료 같은 버튼이 다르게 보여요.
+          </p>
+        </div>
+        <div className="w-full max-w-xs space-y-3 mt-2">
+          <button onClick={onSelectChild}
+            className="w-full py-5 rounded-3xl flex flex-col items-center gap-1 text-white font-bold"
+            style={{ background:`linear-gradient(135deg,${T.blue},${T.indigo})`, boxShadow:"0 8px 32px rgba(37,99,235,0.3)" }}>
+            <span className="text-2xl">🧒</span> 아이 폰이에요
+          </button>
+          <button onClick={() => setShowPin(true)}
+            className="w-full py-5 rounded-3xl flex flex-col items-center gap-1 font-bold text-[#78350F]"
+            style={{ background:"linear-gradient(135deg,#FEF3C7,#FDE68A)", boxShadow:"0 8px 32px rgba(217,119,6,0.2)" }}>
+            <span className="text-2xl">👪</span> 부모님 폰이에요
+          </button>
+        </div>
+        <p className="text-[#111827]/32 text-[12px] mt-2">부모님 모드는 PIN이 필요해요 · 아이 모드는 설정에서 언제든 바꿀 수 있어요</p>
+      </div>
+      {showPin && (
+        <PinPrompt
+          mode={parentPinHash ? "verify" : "create"}
+          verifyHash={parentPinHash}
+          onCancel={() => setShowPin(false)}
+          onSuccess={(hash) => { onSelectParent(hash); setShowPin(false); }}
+        />
+      )}
+    </>
   );
 }
 
@@ -6332,6 +6452,9 @@ export default function App() {
   // 이 기기가 아이 폰인지 부모 폰인지 — 로그인이 아니라 기기별 로컬 표시, 클라우드 동기화 안 함
   const [deviceRole, setDeviceRole] = useState<DeviceRole | null>(() => loadLS(LS_DEVICE_ROLE, null));
   useEffect(() => { if (deviceRole) localStorage.setItem(LS_DEVICE_ROLE, JSON.stringify(deviceRole)); }, [deviceRole]);
+  // 부모 PIN 해시 — 가족 전체가 공유해야 해서(다른 기기에서도 검증 가능해야 함) 클라우드로 동기화된다
+  const [parentPinHash, setParentPinHash] = useState<string | null>(() => loadLS(LS_PARENT_PIN, null));
+  useEffect(() => { localStorage.setItem(LS_PARENT_PIN, JSON.stringify(parentPinHash)); }, [parentPinHash]);
 
   // ── 가족 공유 동기화 (Supabase) ────────────────────────────────────────────────
   // familyId: 링크의 ?fam= 값이 있으면 그걸, 없으면 이 기기에 저장된 값, 그것도 없으면 새로 발급
@@ -6358,6 +6481,7 @@ export default function App() {
           setAllowancePending(remote.allowancePending as AllowanceRequest | null);
         }
         if (remote.studyLog && typeof remote.studyLog === "object") setStudyLog(remote.studyLog as StudyLog);
+        if (typeof remote.parentPinHash === "string" || remote.parentPinHash === null) setParentPinHash(remote.parentPinHash as string | null);
       }
       setCloudReady(true);
     });
@@ -6370,10 +6494,10 @@ export default function App() {
     if (!supabaseEnabled || !cloudReady) return;
     if (cloudSaveTimer.current) window.clearTimeout(cloudSaveTimer.current);
     cloudSaveTimer.current = window.setTimeout(() => {
-      saveFamilyData(familyId, { exp, streak, goalScores, history, notifications, dayPlans, allowancePaid, allowancePending, studyLog });
+      saveFamilyData(familyId, { exp, streak, goalScores, history, notifications, dayPlans, allowancePaid, allowancePending, studyLog, parentPinHash });
     }, 700);
     return () => { if (cloudSaveTimer.current) window.clearTimeout(cloudSaveTimer.current); };
-  }, [exp, streak, goalScores, history, notifications, dayPlans, allowancePaid, allowancePending, studyLog, cloudReady, familyId]);
+  }, [exp, streak, goalScores, history, notifications, dayPlans, allowancePaid, allowancePending, studyLog, parentPinHash, cloudReady, familyId]);
 
   const handleGoalChange = (id: string, v: number) =>
     setGoalScores(prev => ({ ...prev, [id]: v }));
@@ -6519,10 +6643,6 @@ export default function App() {
   const title      = SCREEN_TITLES[screen];
   const onBack     = noBackScreens.has(screen) ? undefined : goBack;
 
-  if (!deviceRole) {
-    return <RoleSelectScreen onSelect={setDeviceRole}/>;
-  }
-
   if (!cloudReady) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3" style={{ backgroundColor:T.bg, fontFamily:T.font }}>
@@ -6532,6 +6652,16 @@ export default function App() {
         </div>
         <p className="text-[#111827]/60 text-sm">불러오는 중...</p>
       </div>
+    );
+  }
+
+  if (!deviceRole) {
+    return (
+      <RoleSelectScreen
+        parentPinHash={parentPinHash}
+        onSelectChild={() => setDeviceRole("child")}
+        onSelectParent={(hash) => { if (!parentPinHash) setParentPinHash(hash); setDeviceRole("parent"); }}
+      />
     );
   }
 
@@ -6664,7 +6794,9 @@ export default function App() {
             familyId={familyId}
             exp={exp} streak={streak}
             deviceRole={deviceRole ?? "child"}
-            onChangeRole={setDeviceRole}
+            parentPinHash={parentPinHash}
+            onSelectChildRole={() => setDeviceRole("child")}
+            onSelectParentRole={(hash) => { if (!parentPinHash) setParentPinHash(hash); setDeviceRole("parent"); }}
             onResetData={()=>{
               setExp(0);
               setStreak(0);
