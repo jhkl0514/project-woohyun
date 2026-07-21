@@ -3598,9 +3598,9 @@ function GDHeroCard({ exp }: { exp:number }) {
 
 // ── GDTodayMissionNudge — 오늘 미완료 미션에 대한 액션 카드 ────────────────────
 // ── AllowanceCard — 용돈: EXP가 그대로 원(1EXP=1원) · 요청/지급확인 ─────────────
-function AllowanceCard({ availableAllowance, pending, onRequest, onConfirmPayout }: {
+function AllowanceCard({ availableAllowance, pending, onRequest, onConfirmPayout, isParent }: {
   availableAllowance:number; pending:AllowanceRequest | null;
-  onRequest:()=>void; onConfirmPayout:()=>void;
+  onRequest:()=>void; onConfirmPayout:()=>void; isParent:boolean;
 }) {
   const [confirmPayout, setConfirmPayout] = useState(false);
   return (
@@ -3619,11 +3619,17 @@ function AllowanceCard({ availableAllowance, pending, onRequest, onConfirmPayout
         <>
           <p className="text-[#78350F] text-[2rem] font-extrabold leading-none mb-1">{pending.amount.toLocaleString()}원</p>
           <p className="text-[13px] text-[#92400E]/70 mb-4">요청됨 · 부모님 확인 대기중</p>
-          <button onClick={() => setConfirmPayout(true)}
-            className="w-full py-3 rounded-2xl text-white font-bold text-sm"
-            style={{ background:"linear-gradient(135deg,#D97706,#B45309)" }}>
-            지급 완료 (부모님)
-          </button>
+          {isParent ? (
+            <button onClick={() => setConfirmPayout(true)}
+              className="w-full py-3 rounded-2xl text-white font-bold text-sm"
+              style={{ background:"linear-gradient(135deg,#D97706,#B45309)" }}>
+              지급 완료 (부모님)
+            </button>
+          ) : (
+            <div className="w-full py-3 rounded-2xl text-center text-[13px] font-semibold text-[#92400E]/60 border-2 border-dashed border-[#D97706]/30">
+              부모님 폰에서 지급 완료를 눌러주시면 정산돼요
+            </div>
+          )}
         </>
       ) : (
         <>
@@ -4047,12 +4053,12 @@ function GDBottomArea({
 
 function GrowthDashboardScreen({
   onHome, onStartStudy, onTab, onGoalScore, exp, streak, history, dayPlans,
-  availableAllowance, allowancePending, onRequestAllowance, onConfirmPayout, onViewStudyLog,
+  availableAllowance, allowancePending, onRequestAllowance, onConfirmPayout, onViewStudyLog, isParent,
 }: {
   onHome:()=>void; onStartStudy:()=>void; onTab:(i:number)=>void; onGoalScore:()=>void;
   exp:number; streak:number; history:Record<string,string[]>; dayPlans:DayPlanOverrides;
   availableAllowance:number; allowancePending:AllowanceRequest | null;
-  onRequestAllowance:()=>void; onConfirmPayout:()=>void; onViewStudyLog:()=>void;
+  onRequestAllowance:()=>void; onConfirmPayout:()=>void; onViewStudyLog:()=>void; isParent:boolean;
 }) {
   const todayStr = toYMD(new Date());
 
@@ -4069,7 +4075,7 @@ function GrowthDashboardScreen({
 
         <GDHeroCard exp={exp}/>
         <AllowanceCard availableAllowance={availableAllowance} pending={allowancePending}
-          onRequest={onRequestAllowance} onConfirmPayout={onConfirmPayout}/>
+          onRequest={onRequestAllowance} onConfirmPayout={onConfirmPayout} isParent={isParent}/>
         <GDTodayMissionNudge history={history} dayPlans={dayPlans} todayStr={todayStr} onStartStudy={onStartStudy} onViewStudyLog={onViewStudyLog}/>
         <GDExamProgressCard history={history} dayPlans={dayPlans} todayStr={todayStr}/>
         <GDWeeklyLearning history={history} streak={streak} todayStr={todayStr} dayPlans={dayPlans}/>
@@ -5069,9 +5075,9 @@ type SettingsState = {
 const LS_SETTINGS = "wh-settings-v1";
 const DAYS_KR = ["월","화","수","목","금","토","일"];
 
-function SettingsScreen({ onBack, onProfile, onResetData, familyId, exp, streak }: {
+function SettingsScreen({ onBack, onProfile, onResetData, familyId, exp, streak, deviceRole, onChangeRole }: {
   onBack:()=>void; onProfile?:()=>void; onResetData?:()=>void; familyId:string;
-  exp:number; streak:number;
+  exp:number; streak:number; deviceRole:DeviceRole; onChangeRole:(role:DeviceRole)=>void;
 }) {
   const lvl = getLevelInfo(exp);
   const todayStr = toYMD(new Date());
@@ -5178,6 +5184,30 @@ function SettingsScreen({ onBack, onProfile, onResetData, familyId, exp, streak 
           </p>
         </div>
       )}
+
+      {/* ── 기기 모드 ── */}
+      <div className={`${T.glassCard} rounded-3xl p-5`} style={{ boxShadow:T.cardShadow }}>
+        <p className="font-bold text-[#111827] text-sm mb-1">이 폰은 누구 거예요?</p>
+        <p className="text-[13px] text-[#111827]/55 mb-3">용돈 지급 완료 버튼 등 일부 기능이 달라져요</p>
+        <div className="flex gap-2">
+          <button onClick={() => onChangeRole("child")}
+            className="flex-1 py-3 rounded-2xl font-bold text-sm transition-all"
+            style={{
+              background: deviceRole === "child" ? `linear-gradient(135deg,${T.blue},${T.indigo})` : "#F1F5F9",
+              color: deviceRole === "child" ? "white" : "#111827aa",
+            }}>
+            🧒 아이 폰
+          </button>
+          <button onClick={() => onChangeRole("parent")}
+            className="flex-1 py-3 rounded-2xl font-bold text-sm transition-all"
+            style={{
+              background: deviceRole === "parent" ? "linear-gradient(135deg,#D97706,#B45309)" : "#F1F5F9",
+              color: deviceRole === "parent" ? "white" : "#111827aa",
+            }}>
+            👪 부모님 폰
+          </button>
+        </div>
+      </div>
 
       {/* ── 알림 설정 ── */}
       <div>
@@ -6177,6 +6207,8 @@ const LS_ALLOWANCE_PENDING = "wh-allowance-pending-v1";
 const LS_STUDY_LOG = "wh-study-log-v1";
 
 type AllowanceRequest = { amount: number; requestedAt: string };
+type DeviceRole = "child" | "parent";
+const LS_DEVICE_ROLE = "wh-device-role-v1"; // 이 기기(브라우저)가 아이 폰인지 부모 폰인지 — 로그인이 아니라 기기별 표시일 뿐, 클라우드 동기화 대상 아님
 type StudyLogEntry = { subjectId:string; missionText:string; elapsedSeconds:number; photoDataUrl:string; completedAt:string };
 type StudyLog = Record<string, StudyLogEntry[]>;
 
@@ -6215,6 +6247,37 @@ function loadLS<T>(key: string, fallback: T): T {
     if (raw !== null) return JSON.parse(raw) as T;
   } catch {}
   return fallback;
+}
+
+// ── 최초 접속 시 "이 기기는 누구 거예요?" — 로그인이 아니라 이 브라우저에만 남는 표시 ──
+function RoleSelectScreen({ onSelect }: { onSelect:(role:DeviceRole)=>void }) {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-6 px-6" style={{ backgroundColor:T.bg, fontFamily:T.font }}>
+      <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-1"
+        style={{ background:`linear-gradient(135deg,${T.blue},${T.indigo})` }}>
+        <span className="text-white text-xl font-bold">W</span>
+      </div>
+      <div className="text-center">
+        <h1 className="text-xl font-bold text-[#111827] mb-2">이 폰은 누가 쓰나요?</h1>
+        <p className="text-[#111827]/55 text-sm leading-relaxed">
+          로그인은 아니고, 이 폰에서만 기억하는 표시예요.<br/>용돈 지급 확인 같은 버튼이 다르게 보여요.
+        </p>
+      </div>
+      <div className="w-full max-w-xs space-y-3 mt-2">
+        <button onClick={() => onSelect("child")}
+          className="w-full py-5 rounded-3xl flex flex-col items-center gap-1 text-white font-bold"
+          style={{ background:`linear-gradient(135deg,${T.blue},${T.indigo})`, boxShadow:"0 8px 32px rgba(37,99,235,0.3)" }}>
+          <span className="text-2xl">🧒</span> 아이 폰이에요
+        </button>
+        <button onClick={() => onSelect("parent")}
+          className="w-full py-5 rounded-3xl flex flex-col items-center gap-1 font-bold text-[#78350F]"
+          style={{ background:"linear-gradient(135deg,#FEF3C7,#FDE68A)", boxShadow:"0 8px 32px rgba(217,119,6,0.2)" }}>
+          <span className="text-2xl">👪</span> 부모님 폰이에요
+        </button>
+      </div>
+      <p className="text-[#111827]/32 text-[12px] mt-2">나중에 설정에서 언제든 바꿀 수 있어요</p>
+    </div>
+  );
 }
 
 export default function App() {
@@ -6265,6 +6328,10 @@ export default function App() {
     try { localStorage.setItem(LS_STUDY_LOG, JSON.stringify(studyLog)); }
     catch { console.warn("학습 기록 저장 공간이 부족해요 — 오래된 사진부터 정리가 필요할 수 있어요."); }
   }, [studyLog]);
+
+  // 이 기기가 아이 폰인지 부모 폰인지 — 로그인이 아니라 기기별 로컬 표시, 클라우드 동기화 안 함
+  const [deviceRole, setDeviceRole] = useState<DeviceRole | null>(() => loadLS(LS_DEVICE_ROLE, null));
+  useEffect(() => { if (deviceRole) localStorage.setItem(LS_DEVICE_ROLE, JSON.stringify(deviceRole)); }, [deviceRole]);
 
   // ── 가족 공유 동기화 (Supabase) ────────────────────────────────────────────────
   // familyId: 링크의 ?fam= 값이 있으면 그걸, 없으면 이 기기에 저장된 값, 그것도 없으면 새로 발급
@@ -6452,6 +6519,10 @@ export default function App() {
   const title      = SCREEN_TITLES[screen];
   const onBack     = noBackScreens.has(screen) ? undefined : goBack;
 
+  if (!deviceRole) {
+    return <RoleSelectScreen onSelect={setDeviceRole}/>;
+  }
+
   if (!cloudReady) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3" style={{ backgroundColor:T.bg, fontFamily:T.font }}>
@@ -6563,6 +6634,7 @@ export default function App() {
             onRequestAllowance={handleRequestAllowance}
             onConfirmPayout={handleConfirmPayout}
             onViewStudyLog={()=>goTo("study-log")}
+            isParent={deviceRole === "parent"}
           />
         )}
         {screen === "calendar" && (
@@ -6591,6 +6663,8 @@ export default function App() {
             onProfile={()=>goTo("admin")}
             familyId={familyId}
             exp={exp} streak={streak}
+            deviceRole={deviceRole ?? "child"}
+            onChangeRole={setDeviceRole}
             onResetData={()=>{
               setExp(0);
               setStreak(0);
