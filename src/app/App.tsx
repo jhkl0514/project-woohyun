@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { resolveFamilyId, getShareUrl, fetchFamilyData, saveFamilyData, supabaseEnabled } from "../lib/familySync";
 import type { LucideIcon } from "lucide-react";
 import {
   Bell, Settings, User, Home, Target, TrendingUp,
@@ -4793,8 +4794,8 @@ type SettingsState = {
 const LS_SETTINGS = "wh-settings-v1";
 const DAYS_KR = ["월","화","수","목","금","토","일"];
 
-function SettingsScreen({ onBack, onProfile, onResetData }: {
-  onBack:()=>void; onProfile?:()=>void; onResetData?:()=>void;
+function SettingsScreen({ onBack, onProfile, onResetData, familyId }: {
+  onBack:()=>void; onProfile?:()=>void; onResetData?:()=>void; familyId:string;
 }) {
   const [cfg, setCfg] = useState<SettingsState>(() => {
     try {
@@ -4815,6 +4816,18 @@ function SettingsScreen({ onBack, onProfile, onResetData }: {
   // 확인 다이얼로그
   const [confirmReset,    setConfirmReset]    = useState(false);
   const [confirmClearData, setConfirmClearData] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const handleCopyShareLink = async () => {
+    const url = getShareUrl(familyId);
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      window.prompt("아래 링크를 복사해서 전달해주세요:", url);
+    }
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
+  };
 
   // 설정 변경 시 localStorage 저장
   useEffect(() => {
@@ -4861,6 +4874,29 @@ function SettingsScreen({ onBack, onProfile, onResetData }: {
           </button>
         </div>
       </div>
+
+      {/* ── 가족과 공유하기 ── */}
+      {supabaseEnabled && (
+        <div className="rounded-3xl p-5" style={{ background:"linear-gradient(140deg,#EEF2FF,#E0E7FF)", boxShadow:"0 4px 28px rgba(79,70,229,0.14)" }}>
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-2xl bg-white/70 flex items-center justify-center flex-shrink-0">
+              <Heart className="w-5 h-5 text-[#4F46E5]"/>
+            </div>
+            <div>
+              <p className="font-bold text-[#312E81] text-sm">가족과 공유하기</p>
+              <p className="text-[11px] text-[#4338CA]/55">이 링크로 열면 같은 학습 기록을 봐요</p>
+            </div>
+          </div>
+          <button onClick={handleCopyShareLink}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-[13px] transition-all"
+            style={{ backgroundColor: linkCopied ? "#059669" : "#4F46E5", color:"white" }}>
+            {linkCopied ? <><CheckCircle2 className="w-4 h-4"/> 링크 복사됨!</> : <><Check className="w-4 h-4"/> 공유 링크 복사하기</>}
+          </button>
+          <p className="text-[10px] text-[#4338CA]/45 mt-2.5 leading-relaxed">
+            엄마·아이가 이 링크로 각자 열면 같은 데이터를 보고 수정할 수 있어요. 링크를 아는 사람만 볼 수 있으니 믿을 수 있는 사람에게만 보내주세요.
+          </p>
+        </div>
+      )}
 
       {/* ── 알림 설정 ── */}
       <div>
@@ -5803,6 +5839,43 @@ export default function App() {
   useEffect(() => { localStorage.setItem(LS_NOTIFS,   JSON.stringify(notifications)); }, [notifications]);
   useEffect(() => { localStorage.setItem(LS_DAY_PLANS, JSON.stringify(dayPlans)); }, [dayPlans]);
 
+  // ── 가족 공유 동기화 (Supabase) ────────────────────────────────────────────────
+  // familyId: 링크의 ?fam= 값이 있으면 그걸, 없으면 이 기기에 저장된 값, 그것도 없으면 새로 발급
+  const [familyId] = useState(() => resolveFamilyId());
+  // Supabase가 설정 안 되어 있으면(로컬 개발 등) 클라우드 단계를 건너뛰고 바로 로컬 데이터로 시작
+  const [cloudReady, setCloudReady] = useState(!supabaseEnabled);
+  const cloudSaveTimer = useRef<number | undefined>(undefined);
+
+  // 최초 1회 — 클라우드에 이미 저장된 데이터가 있으면 그걸로 덮어써서 시작한다
+  useEffect(() => {
+    if (!supabaseEnabled) return;
+    let cancelled = false;
+    fetchFamilyData(familyId).then(remote => {
+      if (cancelled) return;
+      if (remote && Object.keys(remote).length > 0) {
+        if (typeof remote.exp === "number") setExp(remote.exp);
+        if (typeof remote.streak === "number") setStreak(remote.streak);
+        if (remote.goalScores && typeof remote.goalScores === "object") setGoalScores(remote.goalScores as Record<string, number>);
+        if (remote.history && typeof remote.history === "object") setHistory(remote.history as Record<string, string[]>);
+        if (Array.isArray(remote.notifications)) setNotifications(remote.notifications as NotifEntry[]);
+        if (remote.dayPlans && typeof remote.dayPlans === "object") setDayPlans(remote.dayPlans as DayPlanOverrides);
+      }
+      setCloudReady(true);
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [familyId]);
+
+  // 데이터가 바뀔 때마다(0.7초 디바운스) 클라우드로 저장 — 최초 로딩이 끝난 뒤부터만
+  useEffect(() => {
+    if (!supabaseEnabled || !cloudReady) return;
+    if (cloudSaveTimer.current) window.clearTimeout(cloudSaveTimer.current);
+    cloudSaveTimer.current = window.setTimeout(() => {
+      saveFamilyData(familyId, { exp, streak, goalScores, history, notifications, dayPlans });
+    }, 700);
+    return () => { if (cloudSaveTimer.current) window.clearTimeout(cloudSaveTimer.current); };
+  }, [exp, streak, goalScores, history, notifications, dayPlans, cloudReady, familyId]);
+
   const handleGoalChange = (id: string, v: number) =>
     setGoalScores(prev => ({ ...prev, [id]: v }));
 
@@ -5911,6 +5984,18 @@ export default function App() {
   const showTopNav = true;
   const title      = SCREEN_TITLES[screen];
   const onBack     = noBackScreens.has(screen) ? undefined : goBack;
+
+  if (!cloudReady) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3" style={{ backgroundColor:T.bg, fontFamily:T.font }}>
+        <div className="w-10 h-10 rounded-2xl flex items-center justify-center animate-pulse"
+          style={{ background:`linear-gradient(135deg,${T.blue},${T.indigo})` }}>
+          <span className="text-white text-sm font-bold">W</span>
+        </div>
+        <p className="text-[#111827]/40 text-sm">불러오는 중...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen font-sans relative overflow-x-hidden"
@@ -6028,6 +6113,7 @@ export default function App() {
           <SettingsScreen
             onBack={()=>goTo("home")}
             onProfile={()=>goTo("admin")}
+            familyId={familyId}
             onResetData={()=>{
               setExp(0);
               setStreak(0);
