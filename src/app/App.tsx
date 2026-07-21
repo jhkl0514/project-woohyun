@@ -3564,6 +3564,72 @@ function GDHeroCard({ exp }: { exp:number }) {
 }
 
 // ── GDTodayMissionNudge — 오늘 미완료 미션에 대한 액션 카드 ────────────────────
+// ── AllowanceCard — 용돈: EXP가 그대로 원(1EXP=1원) · 요청/지급확인 ─────────────
+function AllowanceCard({ availableAllowance, pending, onRequest, onConfirmPayout }: {
+  availableAllowance:number; pending:AllowanceRequest | null;
+  onRequest:()=>void; onConfirmPayout:()=>void;
+}) {
+  const [confirmPayout, setConfirmPayout] = useState(false);
+  return (
+    <div className="rounded-3xl p-5" style={{ background:"linear-gradient(140deg,#FEF3C7,#FDE68A)", boxShadow:"0 4px 28px rgba(217,119,6,0.14)" }}>
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-9 h-9 rounded-2xl bg-white/70 flex items-center justify-center flex-shrink-0">
+          <span className="text-lg">💰</span>
+        </div>
+        <div>
+          <p className="text-sm font-bold text-[#78350F]">용돈</p>
+          <p className="text-[12px] text-[#92400E]/60">모은 EXP가 그대로 용돈이 돼요 (1 EXP = 1원)</p>
+        </div>
+      </div>
+
+      {pending ? (
+        <>
+          <p className="text-[#78350F] text-[2rem] font-extrabold leading-none mb-1">{pending.amount.toLocaleString()}원</p>
+          <p className="text-[13px] text-[#92400E]/70 mb-4">요청됨 · 부모님 확인 대기중</p>
+          <button onClick={() => setConfirmPayout(true)}
+            className="w-full py-3 rounded-2xl text-white font-bold text-sm"
+            style={{ background:"linear-gradient(135deg,#D97706,#B45309)" }}>
+            지급 완료 (부모님)
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="text-[#78350F] text-[2rem] font-extrabold leading-none mb-1">{availableAllowance.toLocaleString()}원</p>
+          <p className="text-[13px] text-[#92400E]/70 mb-4">지금까지 모은 용돈</p>
+          <button onClick={onRequest} disabled={availableAllowance <= 0}
+            className="w-full py-3 rounded-2xl text-white font-bold text-sm disabled:opacity-40"
+            style={{ background:"linear-gradient(135deg,#D97706,#B45309)" }}>
+            용돈 요청하기
+          </button>
+        </>
+      )}
+
+      {confirmPayout && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
+          style={{ backgroundColor:"rgba(17,24,39,0.45)", backdropFilter:"blur(4px)" }}>
+          <div className={`${T.glassCard} rounded-3xl p-6 w-full max-w-sm`} style={{ boxShadow:"0 24px 64px rgba(17,24,39,0.22)" }}>
+            <h3 className="font-bold text-[#111827] text-base mb-2">지급 완료 확인</h3>
+            <p className="text-sm text-[#111827]/72 mb-5 leading-relaxed">
+              {pending?.amount.toLocaleString()}원을 실제로 계좌이체 하셨나요?<br/>확인을 누르면 요청 금액이 정산 완료로 표시돼요.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmPayout(false)}
+                className="flex-1 py-3 rounded-2xl text-sm font-bold text-[#111827]/72 border-2 border-[#E5E7EB] hover:bg-[#F8FAFC] transition-colors">
+                취소
+              </button>
+              <button onClick={() => { onConfirmPayout(); setConfirmPayout(false); }}
+                className="flex-1 py-3 rounded-2xl text-sm font-bold text-white"
+                style={{ background:"linear-gradient(135deg,#D97706,#B45309)" }}>
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function GDTodayMissionNudge({ history, dayPlans, todayStr, onStartStudy }: {
   history:Record<string,string[]>; dayPlans:DayPlanOverrides; todayStr:string; onStartStudy:()=>void;
 }) {
@@ -3941,9 +4007,12 @@ function GDBottomArea({
 
 function GrowthDashboardScreen({
   onHome, onStartStudy, onTab, onGoalScore, exp, streak, history, dayPlans,
+  availableAllowance, allowancePending, onRequestAllowance, onConfirmPayout,
 }: {
   onHome:()=>void; onStartStudy:()=>void; onTab:(i:number)=>void; onGoalScore:()=>void;
   exp:number; streak:number; history:Record<string,string[]>; dayPlans:DayPlanOverrides;
+  availableAllowance:number; allowancePending:AllowanceRequest | null;
+  onRequestAllowance:()=>void; onConfirmPayout:()=>void;
 }) {
   const todayStr = toYMD(new Date());
 
@@ -3959,6 +4028,8 @@ function GrowthDashboardScreen({
         </div>
 
         <GDHeroCard exp={exp}/>
+        <AllowanceCard availableAllowance={availableAllowance} pending={allowancePending}
+          onRequest={onRequestAllowance} onConfirmPayout={onConfirmPayout}/>
         <GDTodayMissionNudge history={history} dayPlans={dayPlans} todayStr={todayStr} onStartStudy={onStartStudy}/>
         <GDExamProgressCard history={history} dayPlans={dayPlans} todayStr={todayStr}/>
         <GDWeeklyLearning history={history} streak={streak} todayStr={todayStr} dayPlans={dayPlans}/>
@@ -5984,6 +6055,10 @@ const LS_HISTORY  = "wh-study-history-v1";
 const LS_NOTIFS   = "wh-notifications-v1";
 const LS_DAY_PLANS = "wh-day-plans-v1";
 const LS_LAST_DATE = "wh-last-date-v1";
+const LS_ALLOWANCE_PAID    = "wh-allowance-paid-v1";
+const LS_ALLOWANCE_PENDING = "wh-allowance-pending-v1";
+
+type AllowanceRequest = { amount: number; requestedAt: string };
 
 function loadLS<T>(key: string, fallback: T): T {
   try {
@@ -6016,6 +6091,9 @@ export default function App() {
   const [notifications, setNotifications] = useState<NotifEntry[]>(() => loadLS(LS_NOTIFS, []));
   // 날짜별 체크된 과목 — 아이가 직접 체크박스로 바꾼 날짜만 저장, 나머지 날은 자동 추천값 사용
   const [dayPlans, setDayPlans] = useState<DayPlanOverrides>(() => loadLS(LS_DAY_PLANS, {}));
+  // 용돈 — EXP가 그대로 원(1EXP=1원). 이미 지급된 금액은 빼고 계산한다 (exp 자체는 레벨용이라 건드리지 않음)
+  const [allowancePaid, setAllowancePaid] = useState<number>(() => loadLS(LS_ALLOWANCE_PAID, 0));
+  const [allowancePending, setAllowancePending] = useState<AllowanceRequest | null>(() => loadLS(LS_ALLOWANCE_PENDING, null));
   // 과목 체크할 때마다 "반영됐어요" 확인 토스트 — 바로 적용된다는 걸 눈으로 보여줌
   const [planToast, setPlanToast] = useState<string | null>(null);
   const planToastTimer = useRef<number | undefined>(undefined);
@@ -6027,6 +6105,8 @@ export default function App() {
   useEffect(() => { localStorage.setItem(LS_HISTORY,  JSON.stringify(history));    }, [history]);
   useEffect(() => { localStorage.setItem(LS_NOTIFS,   JSON.stringify(notifications)); }, [notifications]);
   useEffect(() => { localStorage.setItem(LS_DAY_PLANS, JSON.stringify(dayPlans)); }, [dayPlans]);
+  useEffect(() => { localStorage.setItem(LS_ALLOWANCE_PAID, JSON.stringify(allowancePaid)); }, [allowancePaid]);
+  useEffect(() => { localStorage.setItem(LS_ALLOWANCE_PENDING, JSON.stringify(allowancePending)); }, [allowancePending]);
 
   // ── 가족 공유 동기화 (Supabase) ────────────────────────────────────────────────
   // familyId: 링크의 ?fam= 값이 있으면 그걸, 없으면 이 기기에 저장된 값, 그것도 없으면 새로 발급
@@ -6048,6 +6128,10 @@ export default function App() {
         if (remote.history && typeof remote.history === "object") setHistory(remote.history as Record<string, string[]>);
         if (Array.isArray(remote.notifications)) setNotifications(remote.notifications as NotifEntry[]);
         if (remote.dayPlans && typeof remote.dayPlans === "object") setDayPlans(remote.dayPlans as DayPlanOverrides);
+        if (typeof remote.allowancePaid === "number") setAllowancePaid(remote.allowancePaid);
+        if (remote.allowancePending === null || (remote.allowancePending && typeof remote.allowancePending === "object")) {
+          setAllowancePending(remote.allowancePending as AllowanceRequest | null);
+        }
       }
       setCloudReady(true);
     });
@@ -6060,10 +6144,10 @@ export default function App() {
     if (!supabaseEnabled || !cloudReady) return;
     if (cloudSaveTimer.current) window.clearTimeout(cloudSaveTimer.current);
     cloudSaveTimer.current = window.setTimeout(() => {
-      saveFamilyData(familyId, { exp, streak, goalScores, history, notifications, dayPlans });
+      saveFamilyData(familyId, { exp, streak, goalScores, history, notifications, dayPlans, allowancePaid, allowancePending });
     }, 700);
     return () => { if (cloudSaveTimer.current) window.clearTimeout(cloudSaveTimer.current); };
-  }, [exp, streak, goalScores, history, notifications, dayPlans, cloudReady, familyId]);
+  }, [exp, streak, goalScores, history, notifications, dayPlans, allowancePaid, allowancePending, cloudReady, familyId]);
 
   const handleGoalChange = (id: string, v: number) =>
     setGoalScores(prev => ({ ...prev, [id]: v }));
@@ -6092,6 +6176,26 @@ export default function App() {
   };
   const markNotifRead    = (id: string) => setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
   const markAllNotifsRead = () => setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+
+  // 용돈 — EXP(=원)에서 이미 지급했거나 요청 중인 금액을 뺀 나머지가 지금 요청 가능한 적립금
+  const availableAllowance = Math.max(0, exp - allowancePaid - (allowancePending?.amount ?? 0));
+
+  const handleRequestAllowance = () => {
+    if (allowancePending || availableAllowance <= 0) return;
+    const amount = availableAllowance;
+    setAllowancePending({ amount, requestedAt: new Date().toISOString() });
+    pushNotification({
+      category: "reward", icon: "💰",
+      title: `우현이가 용돈 ${amount.toLocaleString()}원을 요청했어요`,
+      body: "계좌이체 후 성장 페이지의 '지급 완료' 버튼을 눌러주세요.",
+    });
+  };
+
+  const handleConfirmPayout = () => {
+    if (!allowancePending) return;
+    setAllowancePaid(prev => prev + allowancePending.amount);
+    setAllowancePending(null);
+  };
 
   const todayStr        = toYMD(new Date());
   const todaySchedule    = FULL_SCHEDULE.find(d => d.date === todayStr);
@@ -6284,6 +6388,10 @@ export default function App() {
             streak={streak}
             history={history}
             dayPlans={dayPlans}
+            availableAllowance={availableAllowance}
+            allowancePending={allowancePending}
+            onRequestAllowance={handleRequestAllowance}
+            onConfirmPayout={handleConfirmPayout}
           />
         )}
         {screen === "calendar" && (
@@ -6319,6 +6427,8 @@ export default function App() {
               setDayPlans({});
               setGoalScores(Object.fromEntries(EXAM_SUBJECTS.map(s => [s.id, s.examScore])));
               setNotifications([]);
+              setAllowancePaid(0);
+              setAllowancePending(null);
               goTo("home");
               setActiveNav(0);
             }}
