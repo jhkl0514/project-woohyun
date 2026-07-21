@@ -7,7 +7,7 @@ import {
   Zap, Heart, Calendar, Award, Check, Play,
   Trophy, Globe, Landmark, ArrowRight, Camera,
   Sun, ChevronLeft, Gift, Pause, RefreshCw,
-  CheckCircle2, Loader2,
+  CheckCircle2, Loader2, Trash2,
 } from "lucide-react";
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -4905,7 +4905,7 @@ function MomDashboardScreen({ onBack }: { onBack:()=>void }) {
 // NOTIFICATION CENTER SCREEN — 알림 센터
 // ═══════════════════════════════════════════════════════════════════════════════
 
-type NotifCategory = "all" | "approval" | "reward" | "streak" | "message";
+type NotifCategory = "all" | "approval" | "reward" | "streak" | "message" | "system";
 
 interface NotifEntry {
   id: string; category: Exclude<NotifCategory, "all">;
@@ -4931,6 +4931,7 @@ const NOTIF_TABS: Array<{ key:NotifCategory; label:string }> = [
   { key:"reward",   label:"보상"    },
   { key:"streak",   label:"연속"    },
   { key:"message",  label:"엄마"    },
+  { key:"system",   label:"알림"    },
 ];
 
 const NOTIF_CATEGORY_COLOR: Record<NotifCategory, { bg:string; border:string; dot:string }> = {
@@ -4939,6 +4940,7 @@ const NOTIF_CATEGORY_COLOR: Record<NotifCategory, { bg:string; border:string; do
   reward:   { bg:"#FEF3C7",     border:`${T.amber}20`,      dot:T.amber   },
   streak:   { bg:"#FFF7ED",     border:"rgba(249,115,22,0.18)", dot:"#F97316" },
   message:  { bg:"#FFF1F2",     border:`${T.rose}18`,       dot:T.rose    },
+  system:   { bg:"#FEE2E2",     border:"rgba(220,38,38,0.18)",  dot:"#DC2626" },
 };
 
 function NotificationItem({ notif, onRead }: {
@@ -5479,8 +5481,9 @@ function getWeeklyXPSeries(history: Record<string, string[]>): Array<{ week:stri
 // STUDY LOG SCREEN — 학습 기록: 완료한 미션의 공부 시간·인증 사진을 날짜별로 보여준다
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function StudyLogScreen({ studyLog }: { studyLog:StudyLog }) {
+function StudyLogScreen({ studyLog, onDeleteEntry }: { studyLog:StudyLog; onDeleteEntry:(date:string, index:number)=>void }) {
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ date:string; index:number; subjName:string } | null>(null);
   const dates = Object.keys(studyLog).filter(d => studyLog[d].length > 0).sort((a,b) => b.localeCompare(a));
 
   if (dates.length === 0) {
@@ -5529,10 +5532,15 @@ function StudyLogScreen({ studyLog }: { studyLog:StudyLog }) {
                       <ChevronRight className={`w-4 h-4 text-[#111827]/30 transition-transform ${isOpen ? "rotate-90" : ""}`}/>
                     </button>
                     {isOpen && (
-                      <div className="px-4 pb-4">
+                      <div className="px-4 pb-4 space-y-3">
                         {e.photoDataUrl
                           ? <img src={e.photoDataUrl} alt={`${subj?.name ?? ""} 인증 사진`} className="w-full rounded-xl object-cover" style={{ maxHeight:360 }}/>
                           : <p className="text-[13px] text-[#111827]/45 text-center py-6">사진이 없어요</p>}
+                        <button
+                          onClick={() => setConfirmDelete({ date, index:i, subjName: subj?.name ?? e.subjectId })}
+                          className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[13px] font-semibold text-[#DC2626] border-2 border-[#DC2626]/20 hover:bg-[#FEE2E2] transition-colors">
+                          <Trash2 className="w-4 h-4"/> 이 기록 삭제
+                        </button>
                       </div>
                     )}
                   </div>
@@ -5542,6 +5550,30 @@ function StudyLogScreen({ studyLog }: { studyLog:StudyLog }) {
           </div>
         );
       })}
+
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
+          style={{ backgroundColor:"rgba(17,24,39,0.45)", backdropFilter:"blur(4px)" }}>
+          <div className={`${T.glassCard} rounded-3xl p-6 w-full max-w-sm`} style={{ boxShadow:"0 24px 64px rgba(17,24,39,0.22)" }}>
+            <h3 className="font-bold text-[#DC2626] text-base mb-2">기록 삭제</h3>
+            <p className="text-sm text-[#111827]/72 mb-5 leading-relaxed">
+              {confirmDelete.subjName} 사진과 공부 시간 기록을 삭제할까요?<br/>
+              <span className="font-bold text-[#DC2626]">삭제하면 다시 볼 수 없어요.</span> (EXP·레벨에는 영향 없어요)
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmDelete(null)}
+                className="flex-1 py-3 rounded-2xl text-sm font-bold text-[#111827]/72 border-2 border-[#E5E7EB] hover:bg-[#F8FAFC] transition-colors">
+                취소
+              </button>
+              <button onClick={() => { onDeleteEntry(confirmDelete.date, confirmDelete.index); setConfirmDelete(null); setExpanded(null); }}
+                className="flex-1 py-3 rounded-2xl text-sm font-bold text-white"
+                style={{ background:"linear-gradient(135deg,#DC2626,#B91C1C)" }}>
+                삭제
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
@@ -6468,10 +6500,27 @@ export default function App() {
   useEffect(() => { localStorage.setItem(LS_DAY_PLANS, JSON.stringify(dayPlans)); }, [dayPlans]);
   useEffect(() => { localStorage.setItem(LS_ALLOWANCE_PAID, JSON.stringify(allowancePaid)); }, [allowancePaid]);
   useEffect(() => { localStorage.setItem(LS_ALLOWANCE_PENDING, JSON.stringify(allowancePending)); }, [allowancePending]);
-  // 사진이 쌓이면 용량이 커질 수 있어 저장 실패(용량 초과)해도 앱이 멈추지 않게 방어
+  // 사진이 쌓이면 용량이 커질 수 있어 저장 실패(용량 초과)해도 앱이 멈추지 않게 방어.
+  // 실패하면 화면에 보이는 알림으로 띄운다 — 조용히 사라지지 않게.
+  const storageWarnedRef = useRef(false);
   useEffect(() => {
-    try { localStorage.setItem(LS_STUDY_LOG, JSON.stringify(studyLog)); }
-    catch { console.warn("학습 기록 저장 공간이 부족해요 — 오래된 사진부터 정리가 필요할 수 있어요."); }
+    try {
+      localStorage.setItem(LS_STUDY_LOG, JSON.stringify(studyLog));
+      storageWarnedRef.current = false;
+    } catch {
+      if (storageWarnedRef.current) return;
+      storageWarnedRef.current = true;
+      setNotifications(prev => [
+        {
+          id: `${Date.now()}-storage-full`,
+          category: "system", icon: "⚠️",
+          title: "저장 공간이 부족해요",
+          body: "학습 기록 사진을 더 이상 저장할 수 없어요. 학습 기록에서 오래된 사진을 정리해주세요.",
+          createdAt: new Date().toISOString(), read: false,
+        },
+        ...prev,
+      ]);
+    }
   }, [studyLog]);
 
   // 이 기기가 아이 폰인지 부모 폰인지 — 로그인이 아니라 기기별 로컬 표시, 클라우드 동기화 안 함
@@ -6649,6 +6698,17 @@ export default function App() {
       });
     }
     goTo("reward");
+  };
+
+  // 학습 기록에서 사진/기록 하나를 수동으로 지운다 — EXP·레벨·연속기록에는 영향 없음, 저장 공간 확보용
+  const deleteStudyLogEntry = (date: string, index: number) => {
+    setStudyLog(prev => {
+      const remaining = (prev[date] ?? []).filter((_, i) => i !== index);
+      const next = { ...prev };
+      if (remaining.length > 0) next[date] = remaining;
+      else delete next[date];
+      return next;
+    });
   };
 
   // Unified tab navigation (used by home BottomNav + GD/Cal internal navs)
@@ -6852,7 +6912,7 @@ export default function App() {
           <WeeklyPlanScreen dayPlans={dayPlans} history={history} onToggle={toggleDaySubject} onDone={()=>goTo("home")}/>
         )}
         {screen === "study-log" && (
-          <StudyLogScreen studyLog={studyLog}/>
+          <StudyLogScreen studyLog={studyLog} onDeleteEntry={deleteStudyLogEntry}/>
         )}
 
         {showNav && (
