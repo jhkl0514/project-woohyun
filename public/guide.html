@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>우현이를 위한 사용법 가이드</title>
+<meta name="robots" content="noindex, nofollow"/>
+<link rel="icon" href="/favicon-32.png" type="image/png"/>
+<style>
+  :root {
+    --bg: #F8FAFC;
+    --card: #FFFFFF;
+    --ink: #111827;
+    --ink-soft: #4B5768;
+    --ink-faint: #8592A3;
+    --blue: #2563EB;
+    --indigo: #4F46E5;
+    --green: #059669;
+    --green-bg: #D1FAE5;
+    --amber: #B45309;
+    --amber-bg: #FEF3C7;
+    --border: rgba(17, 24, 39, 0.08);
+    --card-shadow: 0 2px 20px rgba(17, 24, 39, 0.06), 0 1px 4px rgba(17, 24, 39, 0.04);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0B1220;
+    --card: #141C2E;
+    --ink: #EEF2F8;
+    --ink-soft: #B8C2D6;
+    --ink-faint: #7B87A0;
+    --blue: #5B8DFF;
+    --indigo: #8B7CF6;
+    --green: #34D399;
+    --green-bg: rgba(52, 211, 153, 0.14);
+    --amber: #FBBF24;
+    --amber-bg: rgba(251, 191, 36, 0.14);
+    --border: rgba(238, 242, 248, 0.09);
+    --card-shadow: 0 2px 24px rgba(0, 0, 0, 0.35);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0B1220;
+      --card: #141C2E;
+      --ink: #EEF2F8;
+      --ink-soft: #B8C2D6;
+      --ink-faint: #7B87A0;
+      --blue: #5B8DFF;
+      --indigo: #8B7CF6;
+      --green: #34D399;
+      --green-bg: rgba(52, 211, 153, 0.14);
+      --amber: #FBBF24;
+      --amber-bg: rgba(251, 191, 36, 0.14);
+      --border: rgba(238, 242, 248, 0.09);
+      --card-shadow: 0 2px 24px rgba(0, 0, 0, 0.35);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Malgun Gothic", "Apple SD Gothic Neo", "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.5;
+  }
+
+  .wrap {
+    max-width: 560px;
+    margin: 0 auto;
+    padding: 24px 18px 64px;
+  }
+
+  /* Hero */
+  .hero {
+    position: relative;
+    overflow: hidden;
+    border-radius: 28px;
+    padding: 30px 24px 26px;
+    background: linear-gradient(148deg, #1a40c4 0%, var(--blue) 42%, var(--indigo) 100%);
+    box-shadow: 0 12px 40px rgba(37, 99, 235, 0.28);
+    color: white;
+    text-align: center;
+  }
+  .hero::before {
+    content: "";
+    position: absolute;
+    top: -60px; right: -60px;
+    width: 200px; height: 200px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.08);
+  }
+  .badge {
+    width: 52px; height: 52px;
+    border-radius: 15px;
+    margin: 0 auto 12px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.25);
+    font-weight: 800; font-size: 20px;
+    position: relative; z-index: 1;
+  }
+  .hero h1 {
+    margin: 0 0 6px;
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+    position: relative; z-index: 1;
+  }
+  .hero p {
+    margin: 0;
+    font-size: 15px;
+    color: rgba(255,255,255,0.8);
+    position: relative; z-index: 1;
+  }
+
+  /* Money hook */
+  .money {
+    margin-top: 16px;
+    background: linear-gradient(145deg, #FEF3C7, #FDE68A);
+    border-radius: 26px;
+    padding: 24px 20px;
+    box-shadow: 0 10px 30px rgba(217, 119, 6, 0.18);
+  }
+  .money-kicker {
+    text-align: center;
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--amber);
+    margin: 0 0 4px;
+  }
+  .money-headline {
+    text-align: center;
+    font-size: 19px;
+    font-weight: 800;
+    color: #78350F;
+    margin: 0 0 18px;
+    text-wrap: balance;
+  }
+  .money-rows { display: flex; flex-direction: column; gap: 8px; }
+  .money-row {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(255,255,255,0.55);
+    border-radius: 14px;
+    padding: 10px 14px;
+  }
+  .money-row .emoji { font-size: 22px; flex-shrink: 0; }
+  .money-row .label { flex: 1; font-size: 15px; font-weight: 700; color: #78350F; }
+  .money-row .won { font-size: 17px; font-weight: 800; color: var(--amber); white-space: nowrap; }
+  .money-total {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 12px;
+    padding: 14px 16px;
+    background: #78350F;
+    border-radius: 14px;
+  }
+  .money-total .label { font-size: 15px; font-weight: 700; color: #FEF3C7; }
+  .money-total .won { font-size: 26px; font-weight: 800; color: white; }
+
+  .streak-strip {
+    margin-top: 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+  .streak-chip {
+    flex-shrink: 0;
+    text-align: center;
+    background: rgba(255,255,255,0.6);
+    border-radius: 12px;
+    padding: 8px 12px;
+    min-width: 68px;
+  }
+  .streak-chip .wk { font-size: 11px; font-weight: 700; color: var(--amber); }
+  .streak-chip .mult { font-size: 15px; font-weight: 800; color: #78350F; }
+  .streak-arrow { flex-shrink: 0; color: var(--amber); font-weight: 800; }
+  .money-note {
+    margin: 12px 0 0;
+    font-size: 12.5px;
+    color: #92400E;
+    text-align: center;
+  }
+
+  /* Section label */
+  .section-label {
+    margin: 32px 0 12px;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    padding: 0 2px;
+  }
+  .section-label:first-of-type { margin-top: 30px; }
+
+  /* Step cards */
+  .steps { display: flex; flex-direction: column; gap: 10px; }
+  .step {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 14px 16px;
+    box-shadow: var(--card-shadow);
+  }
+  .step-icon {
+    flex-shrink: 0;
+    width: 46px; height: 46px;
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    background: color-mix(in srgb, var(--blue) 10%, transparent);
+  }
+  .step-body { min-width: 0; flex: 1; }
+  .step-title {
+    font-weight: 800;
+    font-size: 16px;
+    margin: 0 0 2px;
+    color: var(--ink);
+    text-wrap: balance;
+  }
+  .step-desc {
+    margin: 0;
+    font-size: 14px;
+    color: var(--ink-soft);
+    line-height: 1.4;
+  }
+  .step-desc b { color: var(--ink); font-weight: 800; }
+
+  /* Tips */
+  .tips {
+    margin-top: 14px;
+    background: var(--amber-bg);
+    border: 1px solid color-mix(in srgb, var(--amber) 30%, transparent);
+    border-radius: 20px;
+    padding: 18px 20px;
+  }
+  .tips h3 {
+    margin: 0 0 12px;
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--amber);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .tips ul { margin: 0; padding-left: 0; list-style: none; }
+  .tips li {
+    font-size: 14px;
+    color: var(--ink-soft);
+    margin-bottom: 10px;
+    line-height: 1.5;
+    display: flex;
+    gap: 8px;
+  }
+  .tips li::before { content: "•"; color: var(--amber); font-weight: 800; }
+  .tips li:last-child { margin-bottom: 0; }
+  .tips b { color: var(--ink); }
+
+  /* CTA */
+  .cta {
+    margin-top: 28px;
+    text-align: center;
+  }
+  .cta a {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 16px 32px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, var(--blue), var(--indigo));
+    color: white;
+    font-weight: 800;
+    font-size: 16px;
+    text-decoration: none;
+    box-shadow: 0 10px 28px rgba(37, 99, 235, 0.3);
+  }
+  .cta p {
+    margin: 12px 0 0;
+    font-size: 13px;
+    color: var(--ink-faint);
+  }
+
+  a:focus-visible, button:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <div class="hero">
+    <div class="badge">W</div>
+    <h1>우현이를 위한 사용법</h1>
+    <p>2학기 중간고사 대비 스터디 앱</p>
+  </div>
+
+  <div class="money">
+    <p class="money-kicker">💰 얼마나 벌 수 있을까?</p>
+    <p class="money-headline">오늘 미션 3개 다 하면?</p>
+    <div class="money-rows">
+      <div class="money-row"><span class="emoji">🔢</span><span class="label">수학 다 풀기</span><span class="won">+300원</span></div>
+      <div class="money-row"><span class="emoji">🌍</span><span class="label">영어 단어 외우기</span><span class="won">+200원</span></div>
+      <div class="money-row"><span class="emoji">🔬</span><span class="label">과학 정리하기</span><span class="won">+300원</span></div>
+    </div>
+    <div class="money-total">
+      <span class="label">오늘 하루 용돈</span>
+      <span class="won">800원</span>
+    </div>
+
+    <div class="streak-strip">
+      <div class="streak-chip"><div class="wk">지금</div><div class="mult">×1</div></div>
+      <span class="streak-arrow">→</span>
+      <div class="streak-chip"><div class="wk">2주 연속</div><div class="mult">×2</div></div>
+      <span class="streak-arrow">→</span>
+      <div class="streak-chip"><div class="wk">4주</div><div class="mult">×3</div></div>
+      <span class="streak-arrow">→</span>
+      <div class="streak-chip"><div class="wk">6주</div><div class="mult">×4</div></div>
+      <span class="streak-arrow">→</span>
+      <div class="streak-chip"><div class="wk">8주</div><div class="mult">×5</div></div>
+    </div>
+    <p class="money-note">2주 연속 다 하면 같은 하루가 <b>1,600원</b>! 8주 연속이면 <b>4,000원</b>까지 올라가.</p>
+  </div>
+
+  <div class="section-label">시작하기</div>
+  <div class="steps">
+    <div class="step">
+      <div class="step-icon">🔗</div>
+      <div class="step-body">
+        <p class="step-title">링크 열기</p>
+        <p class="step-desc">처음엔 <b>"아이 폰이에요"</b> 눌러줘</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-icon">🏠</div>
+      <div class="step-body">
+        <p class="step-title">오늘 할 일 확인</p>
+        <p class="step-desc">홈 화면 <b>"오늘의 미션"</b>에 다 나와</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-label">미션 하는 순서</div>
+  <div class="steps">
+    <div class="step">
+      <div class="step-icon">📚</div>
+      <div class="step-body">
+        <p class="step-title">1. 과목 골라 시작</p>
+        <p class="step-desc">카드 누르고 <b>시작하기</b></p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-icon">⏱️</div>
+      <div class="step-body">
+        <p class="step-title">2. 최소 20분 공부</p>
+        <p class="step-desc">타이머 다 채워야 완료 버튼이 눌려</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-icon">📸</div>
+      <div class="step-body">
+        <p class="step-title">3. 교재 사진 찍기</p>
+        <p class="step-desc"><b>진짜 카메라</b>로 오늘 푼 거 찍기</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-icon">🎉</div>
+      <div class="step-body">
+        <p class="step-title">4. 짜잔, 보상!</p>
+        <p class="step-desc">EXP 받고 레벨업, 용돈도 쌓여</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-label">더 알아두면 좋은 것</div>
+  <div class="steps">
+    <div class="step">
+      <div class="step-icon">📅</div>
+      <div class="step-body">
+        <p class="step-title">미션설정</p>
+        <p class="step-desc">이번 주 뭐 할지 직접 정해</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-icon">🌳</div>
+      <div class="step-body">
+        <p class="step-title">성장</p>
+        <p class="step-desc">레벨·배지·이번 주 기록 확인</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-icon">💸</div>
+      <div class="step-body">
+        <p class="step-title">용돈 요청하기</p>
+        <p class="step-desc">모은 돈, 부모님한테 요청 버튼 누르면 끝</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-icon">📷</div>
+      <div class="step-body">
+        <p class="step-title">학습 기록</p>
+        <p class="step-desc">그동안 찍은 사진 다시보기</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="tips">
+    <h3>⚠️ 이것만 기억해줘</h3>
+    <ul>
+      <li>최소 <b>20분</b>은 채워야 완료 버튼이 눌려</li>
+      <li>사진은 <b>진짜로 오늘 공부한 교재</b>를 찍기</li>
+      <li>매주 다 채워야 다음 주부터 용돈이 <b>더 많이</b> 쌓여</li>
+    </ul>
+  </div>
+
+  <div class="cta">
+    <a href="https://project-woohyun.vercel.app" target="_blank" rel="noopener">지금 앱 열기 →</a>
+    <p>엄마가 보내준 링크로 들어가야 같은 기록이 보여!</p>
+  </div>
+
+</div>
+</body>
+</html>
