@@ -158,30 +158,41 @@
   .money-total .label { font-size: 15px; font-weight: 700; color: #FEF3C7; }
   .money-total .won { font-size: 26px; font-weight: 800; color: white; }
 
-  .streak-strip {
+  /* Build-up chart (누적 용돈) */
+  .buildup {
     margin-top: 14px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    overflow-x: auto;
-    padding-bottom: 2px;
+    background: linear-gradient(145deg, #FEF3C7, #FDE68A);
+    border-radius: 26px;
+    padding: 24px 20px;
+    box-shadow: 0 10px 30px rgba(217, 119, 6, 0.18);
   }
-  .streak-chip {
-    flex-shrink: 0;
+  .buildup-rows { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+  .buildup-row { display: flex; align-items: center; gap: 10px; }
+  .buildup-wk { flex-shrink: 0; width: 44px; font-size: 13px; font-weight: 800; color: #78350F; }
+  .buildup-track { flex: 1; height: 26px; border-radius: 8px; background: rgba(255,255,255,0.55); overflow: hidden; }
+  .buildup-fill {
+    height: 100%;
+    border-radius: 8px;
+    background: linear-gradient(90deg, #D97706, #B45309);
+    display: flex; align-items: center; justify-content: flex-end;
+    padding-right: 8px;
+  }
+  .buildup-won { flex-shrink: 0; width: 78px; text-align: right; font-size: 14px; font-weight: 800; color: #78350F; }
+  .buildup-final {
+    margin-top: 16px;
     text-align: center;
-    background: rgba(255,255,255,0.6);
-    border-radius: 12px;
-    padding: 8px 12px;
-    min-width: 68px;
+    padding: 14px;
+    background: #78350F;
+    border-radius: 14px;
   }
-  .streak-chip .wk { font-size: 11px; font-weight: 700; color: var(--amber); }
-  .streak-chip .mult { font-size: 15px; font-weight: 800; color: #78350F; }
-  .streak-arrow { flex-shrink: 0; color: var(--amber); font-weight: 800; }
+  .buildup-final .big { font-size: 24px; font-weight: 800; color: white; }
+  .buildup-final .small { font-size: 12.5px; color: #FDE68A; margin-top: 2px; }
   .money-note {
-    margin: 12px 0 0;
+    margin: 10px 0 0;
     font-size: 12.5px;
     color: #92400E;
     text-align: center;
+    line-height: 1.5;
   }
 
   /* Section label */
@@ -312,19 +323,6 @@
       <span class="label">오늘 하루 용돈</span>
       <span class="won">800원</span>
     </div>
-
-    <div class="streak-strip">
-      <div class="streak-chip"><div class="wk">지금</div><div class="mult">×1</div></div>
-      <span class="streak-arrow">→</span>
-      <div class="streak-chip"><div class="wk">2주 연속</div><div class="mult">×2</div></div>
-      <span class="streak-arrow">→</span>
-      <div class="streak-chip"><div class="wk">4주</div><div class="mult">×3</div></div>
-      <span class="streak-arrow">→</span>
-      <div class="streak-chip"><div class="wk">6주</div><div class="mult">×4</div></div>
-      <span class="streak-arrow">→</span>
-      <div class="streak-chip"><div class="wk">8주</div><div class="mult">×5</div></div>
-    </div>
-    <p class="money-note">2주 연속 다 하면 같은 하루가 <b>1,600원</b>! 8주 연속이면 <b>4,000원</b>까지 올라가.</p>
   </div>
 
   <div class="section-label">시작하기</div>
@@ -407,6 +405,43 @@
         <p class="step-desc">그동안 찍은 사진 다시보기</p>
       </div>
     </div>
+  </div>
+
+  <div class="buildup">
+    <p class="money-kicker">📈 쉬지 않고 하면?</p>
+    <p class="money-headline">매일 미션 다 하면 이만큼 쌓여</p>
+    <div class="buildup-rows">
+      <div class="buildup-row">
+        <span class="buildup-wk">2주</span>
+        <div class="buildup-track"><div class="buildup-fill" style="width:14%"></div></div>
+        <span class="buildup-won">6,550원</span>
+      </div>
+      <div class="buildup-row">
+        <span class="buildup-wk">4주</span>
+        <div class="buildup-track"><div class="buildup-fill" style="width:24%"></div></div>
+        <span class="buildup-won">20,950원</span>
+      </div>
+      <div class="buildup-row">
+        <span class="buildup-wk">6주</span>
+        <div class="buildup-track"><div class="buildup-fill" style="width:44%"></div></div>
+        <span class="buildup-won">40,600원</span>
+      </div>
+      <div class="buildup-row">
+        <span class="buildup-wk">8주</span>
+        <div class="buildup-track"><div class="buildup-fill" style="width:72%"></div></div>
+        <span class="buildup-won">69,400원</span>
+      </div>
+      <div class="buildup-row">
+        <span class="buildup-wk">10주</span>
+        <div class="buildup-track"><div class="buildup-fill" style="width:100%"></div></div>
+        <span class="buildup-won">98,150원</span>
+      </div>
+    </div>
+    <div class="buildup-final">
+      <div class="big">10주 후 거의 10만원! 🎉</div>
+      <div class="small">연속으로 다 채울수록 배수가 붙어서 더 빨리 쌓여</div>
+    </div>
+    <p class="money-note">한 주라도 놓치면 배수가 처음부터 다시 시작돼 — 그래서 꾸준히가 제일 중요해.</p>
   </div>
 
   <div class="tips">
