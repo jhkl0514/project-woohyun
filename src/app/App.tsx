@@ -46,7 +46,7 @@ type StudySubject = {
   mission: string; recommended?: boolean; done: boolean;
 };
 
-type Screen = "home" | "briefing" | "select" | "mission" | "focus" | "photo" | "reward" | "reflection" | "daily-review" | "tree-evolution" | "growth-dashboard" | "calendar" | "mom-dashboard" | "notifications" | "settings" | "admin" | "goal-setting" | "schedule-list" | "weekly-plan";
+type Screen = "home" | "briefing" | "select" | "mission" | "focus" | "photo" | "reward" | "reflection" | "daily-review" | "tree-evolution" | "growth-dashboard" | "calendar" | "mom-dashboard" | "notifications" | "settings" | "admin" | "goal-setting" | "schedule-list" | "weekly-plan" | "study-log";
 
 type ReviewType = "review" | "preview"; // 복습 | 예습
 
@@ -950,8 +950,8 @@ function SubjectCard({ subject, onStart }: { subject:Subject; onStart:()=>void }
   );
 }
 
-function TodaysMissions({ subjects, onStart, onViewWeeklyPlan, beforeStart }: {
-  subjects:Subject[]; onStart:(id:string)=>void; onViewWeeklyPlan:()=>void; beforeStart:boolean;
+function TodaysMissions({ subjects, onStart, onViewWeeklyPlan, onViewStudyLog, beforeStart }: {
+  subjects:Subject[]; onStart:(id:string)=>void; onViewWeeklyPlan:()=>void; onViewStudyLog:()=>void; beforeStart:boolean;
 }) {
   const done      = subjects.filter(s=>s.done).length;
   const remaining = subjects.reduce((a,s)=>a+(s.done?0:s.time),0);
@@ -965,10 +965,18 @@ function TodaysMissions({ subjects, onStart, onViewWeeklyPlan, beforeStart }: {
             {remaining>0&&<span className="ml-2 text-[#111827]/48">· {remaining}분 남음</span>}
           </p>
         </div>
-        <button onClick={onViewWeeklyPlan}
-          className="flex items-center gap-0.5 text-[#2563EB] text-[13px] font-semibold hover:opacity-70 transition-opacity">
-          이번 주 계획 <ChevronRight className="w-4 h-4"/>
-        </button>
+        <div className="flex items-center gap-3">
+          {done > 0 && (
+            <button onClick={onViewStudyLog}
+              className="flex items-center gap-0.5 text-[#111827]/55 text-[13px] font-semibold hover:opacity-70 transition-opacity">
+              <Camera className="w-3.5 h-3.5"/> 학습 기록
+            </button>
+          )}
+          <button onClick={onViewWeeklyPlan}
+            className="flex items-center gap-0.5 text-[#2563EB] text-[13px] font-semibold hover:opacity-70 transition-opacity">
+            이번 주 계획 <ChevronRight className="w-4 h-4"/>
+          </button>
+        </div>
       </div>
       {subjects.length === 0 ? (
         <div className={`${T.glassCard} rounded-3xl p-8 text-center`} style={{ boxShadow:T.cardShadow }}>
@@ -1646,7 +1654,7 @@ function MissionDetailScreen({ subjectId, missionText, onStart, onBack }: {
 // ── Screen 3: 집중하기 ────────────────────────────────────────────────────────
 
 function FocusScreen({ subjectId, missionText, onComplete, onBack, goalScore }: {
-  subjectId:string; missionText:string; onComplete:()=>void; onBack:()=>void; goalScore?:number;
+  subjectId:string; missionText:string; onComplete:(elapsedSeconds:number)=>void; onBack:()=>void; goalScore?:number;
 }) {
   const subject  = EXAM_SUBJECTS.find(s=>s.id===subjectId) ?? EXAM_SUBJECTS[0];
   const TOTAL    = subject.time * 60;
@@ -1659,7 +1667,7 @@ function FocusScreen({ subjectId, missionText, onComplete, onBack, goalScore }: 
     return () => window.clearInterval(id);
   }, [running, timeLeft]);
 
-  useEffect(() => { if (timeLeft === 0) onComplete(); }, [timeLeft, onComplete]);
+  useEffect(() => { if (timeLeft === 0) onComplete(TOTAL); }, [timeLeft, onComplete, TOTAL]);
 
   const mm   = String(Math.floor(timeLeft / 60)).padStart(2, "0");
   const ss   = String(timeLeft % 60).padStart(2, "0");
@@ -1765,7 +1773,7 @@ function FocusScreen({ subjectId, missionText, onComplete, onBack, goalScore }: 
             className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm border-2 border-[#E5E7EB] text-[#111827]/75 hover:border-[#111827]/20 hover:text-[#111827] transition-all">
             {running ? <><Pause className="w-4 h-4"/> 일시정지</> : <><Play className="w-4 h-4" fill="currentColor"/> 재개</>}
           </button>
-          <button onClick={onComplete}
+          <button onClick={()=>onComplete(TOTAL - timeLeft)}
             className="cta-btn flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm text-white"
             style={{ background:`linear-gradient(135deg,${subject.color},${T.indigo})`, boxShadow:`0 6px 24px ${subject.color}40` }}>
             <Check className="w-4 h-4"/> 완료
@@ -1781,33 +1789,39 @@ function FocusScreen({ subjectId, missionText, onComplete, onBack, goalScore }: 
 type PhotoState = "camera" | "preview" | "checking" | "verified";
 
 function PhotoScreen({ subjectId, missionText, onSubmit, onBack }: {
-  subjectId:string; missionText:string; onSubmit:()=>void; onBack:()=>void;
+  subjectId:string; missionText:string; onSubmit:(photoDataUrl:string)=>void; onBack:()=>void;
 }) {
   const subject              = EXAM_SUBJECTS.find(s=>s.id===subjectId) ?? EXAM_SUBJECTS[0];
   const [ps, setPs]          = useState<PhotoState>("camera");
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
+  const [compressing, setCompressing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleCapture = () => fileInputRef.current?.click();
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    if (photoUrl) URL.revokeObjectURL(photoUrl);
-    setPhotoUrl(URL.createObjectURL(file));
-    setPs("preview");
     e.target.value = "";
+    if (!file) return;
+    setCompressing(true);
+    try {
+      const compressed = await compressImageFile(file);
+      setPhotoDataUrl(compressed);
+      setPs("preview");
+    } catch {
+      setPs("camera");
+    } finally {
+      setCompressing(false);
+    }
   };
   const handleSubmit  = () => {
     setPs("checking");
     setTimeout(()=>setPs("verified"), 2200);
-    setTimeout(()=>onSubmit(), 3200);
+    setTimeout(()=>onSubmit(photoDataUrl ?? ""), 3200);
   };
   const handleRetake = () => {
-    if (photoUrl) URL.revokeObjectURL(photoUrl);
-    setPhotoUrl(null);
+    setPhotoDataUrl(null);
     setPs("camera");
   };
-  useEffect(() => () => { if (photoUrl) URL.revokeObjectURL(photoUrl); }, [photoUrl]);
 
   return (
     <main className="max-w-[560px] mx-auto px-4 sm:px-6 py-6 pb-12 space-y-5">
@@ -1839,20 +1853,29 @@ function PhotoScreen({ subjectId, missionText, onSubmit, onBack }: {
 
         {ps === "camera" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
-            <div className="w-16 h-16 rounded-full bg-white/8 flex items-center justify-center">
-              <Camera className="w-8 h-8 text-white/40"/>
-            </div>
-            <div className="text-center">
-              <p className="text-white/50 text-sm font-medium">교재를 펼쳐서 화면 안에 담아주세요</p>
-              <p className="text-white/25 text-xs mt-1">풀이한 내용이 보이도록 찍어주세요</p>
-            </div>
+            {compressing ? (
+              <>
+                <Loader2 className="w-8 h-8 text-white/60 spin-slow"/>
+                <p className="text-white/50 text-sm font-medium">사진 처리 중...</p>
+              </>
+            ) : (
+              <>
+                <div className="w-16 h-16 rounded-full bg-white/8 flex items-center justify-center">
+                  <Camera className="w-8 h-8 text-white/40"/>
+                </div>
+                <div className="text-center">
+                  <p className="text-white/50 text-sm font-medium">교재를 펼쳐서 화면 안에 담아주세요</p>
+                  <p className="text-white/25 text-xs mt-1">풀이한 내용이 보이도록 찍어주세요</p>
+                </div>
+              </>
+            )}
           </div>
         )}
 
         {(ps === "preview" || ps === "checking" || ps === "verified") && (
           <div className="absolute inset-0">
-            {photoUrl
-              ? <img src={photoUrl} alt="찍은 교재 사진" className="w-full h-full object-cover"/>
+            {photoDataUrl
+              ? <img src={photoDataUrl} alt="찍은 교재 사진" className="w-full h-full object-cover"/>
               : (
                 <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-[#F8F9FA]">
                   <BookOpen className="w-12 h-12 text-[#94A3B8]"/>
@@ -3630,8 +3653,8 @@ function AllowanceCard({ availableAllowance, pending, onRequest, onConfirmPayout
   );
 }
 
-function GDTodayMissionNudge({ history, dayPlans, todayStr, onStartStudy }: {
-  history:Record<string,string[]>; dayPlans:DayPlanOverrides; todayStr:string; onStartStudy:()=>void;
+function GDTodayMissionNudge({ history, dayPlans, todayStr, onStartStudy, onViewStudyLog }: {
+  history:Record<string,string[]>; dayPlans:DayPlanOverrides; todayStr:string; onStartStudy:()=>void; onViewStudyLog:()=>void;
 }) {
   const sched = FULL_SCHEDULE.find(d => d.date === todayStr);
   if (!sched || sched.kind !== "study") return null;
@@ -3646,10 +3669,14 @@ function GDTodayMissionNudge({ history, dayPlans, todayStr, onStartStudy }: {
         <div className="w-10 h-10 rounded-2xl bg-white/70 flex items-center justify-center flex-shrink-0">
           <span className="text-lg">🎉</span>
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <p className="font-bold text-[#065F46] text-sm">오늘 미션을 모두 완료했어요!</p>
           <p className="text-[12px] text-[#047857]/70 mt-0.5">잘하고 있어요. 내일도 화이팅!</p>
         </div>
+        <button onClick={onViewStudyLog}
+          className="flex-shrink-0 flex items-center gap-1 text-[#065F46] text-[13px] font-bold hover:opacity-70 transition-opacity">
+          기록 보기 <ChevronRight className="w-4 h-4"/>
+        </button>
       </div>
     );
   }
@@ -3662,7 +3689,10 @@ function GDTodayMissionNudge({ history, dayPlans, todayStr, onStartStudy }: {
       </div>
       <div className="flex-1 min-w-0">
         <p className="font-bold text-[#92400E] text-sm">오늘 미션이 {remaining}개 남았어요</p>
-        <p className="text-[12px] text-[#B45309]/75 mt-0.5">{done}/{planned.length} 완료 · 지금 이어서 해볼까요?</p>
+        <p className="text-[12px] text-[#B45309]/75 mt-0.5">
+          {done}/{planned.length} 완료 · 지금 이어서 해볼까요?
+          {done > 0 && <> · <button onClick={onViewStudyLog} className="underline font-semibold">기록 보기</button></>}
+        </p>
       </div>
       <button onClick={onStartStudy}
         className="flex-shrink-0 px-4 py-2 rounded-xl text-white text-[13px] font-bold"
@@ -4007,12 +4037,12 @@ function GDBottomArea({
 
 function GrowthDashboardScreen({
   onHome, onStartStudy, onTab, onGoalScore, exp, streak, history, dayPlans,
-  availableAllowance, allowancePending, onRequestAllowance, onConfirmPayout,
+  availableAllowance, allowancePending, onRequestAllowance, onConfirmPayout, onViewStudyLog,
 }: {
   onHome:()=>void; onStartStudy:()=>void; onTab:(i:number)=>void; onGoalScore:()=>void;
   exp:number; streak:number; history:Record<string,string[]>; dayPlans:DayPlanOverrides;
   availableAllowance:number; allowancePending:AllowanceRequest | null;
-  onRequestAllowance:()=>void; onConfirmPayout:()=>void;
+  onRequestAllowance:()=>void; onConfirmPayout:()=>void; onViewStudyLog:()=>void;
 }) {
   const todayStr = toYMD(new Date());
 
@@ -4030,7 +4060,7 @@ function GrowthDashboardScreen({
         <GDHeroCard exp={exp}/>
         <AllowanceCard availableAllowance={availableAllowance} pending={allowancePending}
           onRequest={onRequestAllowance} onConfirmPayout={onConfirmPayout}/>
-        <GDTodayMissionNudge history={history} dayPlans={dayPlans} todayStr={todayStr} onStartStudy={onStartStudy}/>
+        <GDTodayMissionNudge history={history} dayPlans={dayPlans} todayStr={todayStr} onStartStudy={onStartStudy} onViewStudyLog={onViewStudyLog}/>
         <GDExamProgressCard history={history} dayPlans={dayPlans} todayStr={todayStr}/>
         <GDWeeklyLearning history={history} streak={streak} todayStr={todayStr} dayPlans={dayPlans}/>
         <GDBadgesGrid exp={exp} streak={streak} history={history} dayPlans={dayPlans}/>
@@ -5362,9 +5392,80 @@ function getWeeklyXPSeries(history: Record<string, string[]>): Array<{ week:stri
   return weeks;
 }
 
-function AdminDashboardScreen({ exp, streak, history, dayPlans, onCalendar, onSchedule }: {
+// ═══════════════════════════════════════════════════════════════════════════════
+// STUDY LOG SCREEN — 학습 기록: 완료한 미션의 공부 시간·인증 사진을 날짜별로 보여준다
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function StudyLogScreen({ studyLog }: { studyLog:StudyLog }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const dates = Object.keys(studyLog).filter(d => studyLog[d].length > 0).sort((a,b) => b.localeCompare(a));
+
+  if (dates.length === 0) {
+    return (
+      <main className="max-w-[640px] mx-auto px-4 sm:px-6 py-16 text-center">
+        <span className="text-4xl mb-3 block">📷</span>
+        <p className="font-bold text-[#111827] mb-1">아직 완료한 학습 기록이 없어요</p>
+        <p className="text-[#111827]/60 text-sm">미션을 완료하면 공부 시간과 인증 사진이 여기 쌓여요.</p>
+      </main>
+    );
+  }
+
+  return (
+    <main className="max-w-[640px] mx-auto px-4 sm:px-6 py-6 pb-16 space-y-6">
+      {dates.map(date => {
+        const entries = studyLog[date];
+        const totalSeconds = entries.reduce((a,e) => a + e.elapsedSeconds, 0);
+        const d = parseYMD(date);
+        const dateLabel = `${d.getMonth()+1}월 ${d.getDate()}일 (${"일월화수목금토"[d.getDay()]})`;
+        return (
+          <div key={date}>
+            <div className="flex items-center justify-between mb-3 px-1">
+              <h3 className="font-bold text-[#111827] text-[15px]">{dateLabel}</h3>
+              <span className="text-[13px] text-[#111827]/52">총 {formatDuration(totalSeconds)} · {entries.length}과목</span>
+            </div>
+            <div className="space-y-3">
+              {entries.map((e, i) => {
+                const subj = EXAM_SUBJECTS.find(s => s.id === e.subjectId);
+                const key = `${date}-${i}`;
+                const isOpen = expanded === key;
+                return (
+                  <div key={key} className={`${T.glassCard} rounded-2xl overflow-hidden`} style={{ boxShadow:T.cardShadow }}>
+                    <button onClick={() => setExpanded(isOpen ? null : key)}
+                      className="w-full flex items-center gap-3 p-4 text-left">
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor:subj?.bg }}>
+                        {subj && <subj.icon className="w-5 h-5" style={{ color:subj.color }}/>}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-[#111827] text-sm">{subj?.name ?? e.subjectId}</p>
+                        <p className="text-[13px] text-[#111827]/58 truncate">{e.missionText}</p>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-[13px] font-bold text-[#111827]/72">{formatDuration(e.elapsedSeconds)}</p>
+                        <p className="text-[11px] text-[#111827]/40">공부 시간</p>
+                      </div>
+                      <ChevronRight className={`w-4 h-4 text-[#111827]/30 transition-transform ${isOpen ? "rotate-90" : ""}`}/>
+                    </button>
+                    {isOpen && (
+                      <div className="px-4 pb-4">
+                        {e.photoDataUrl
+                          ? <img src={e.photoDataUrl} alt={`${subj?.name ?? ""} 인증 사진`} className="w-full rounded-xl object-cover" style={{ maxHeight:360 }}/>
+                          : <p className="text-[13px] text-[#111827]/45 text-center py-6">사진이 없어요</p>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </main>
+  );
+}
+
+function AdminDashboardScreen({ exp, streak, history, dayPlans, onCalendar, onSchedule, onViewStudyLog }: {
   exp:number; streak:number; history:Record<string,string[]>; dayPlans:DayPlanOverrides;
-  onCalendar:()=>void; onSchedule:()=>void;
+  onCalendar:()=>void; onSchedule:()=>void; onViewStudyLog:()=>void;
 }) {
   const todayStr      = toYMD(new Date());
   const pastStudyDays = FULL_SCHEDULE.filter(d => d.kind === "study" && diffDaysStr(d.date, todayStr) >= 0);
@@ -5406,10 +5507,14 @@ function AdminDashboardScreen({ exp, streak, history, dayPlans, onCalendar, onSc
       <div className="flex items-center gap-3 px-1">
         <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-xl flex-shrink-0"
           style={{ background:"linear-gradient(135deg,#1E293B,#334155)" }}>👤</div>
-        <div>
+        <div className="flex-1 min-w-0">
           <p className="font-bold text-[#111827] text-base">우현이 학습 현황</p>
           <p className="text-[#111827]/62 text-[12px]">7.21 ~ 10.2 중간고사 대비 학습 현황 분석</p>
         </div>
+        <button onClick={onViewStudyLog}
+          className="flex-shrink-0 flex items-center gap-1 px-3 py-2 rounded-xl bg-[#111827]/05 text-[#111827]/70 text-[13px] font-semibold hover:bg-[#111827]/10 transition-colors">
+          <Camera className="w-4 h-4"/> 학습 기록
+        </button>
       </div>
 
       {/* KPI grid */}
@@ -5990,7 +6095,7 @@ function HomeScreen({
         <div className="flex-1 min-w-0 space-y-6">
           <HeroSection completed={subjects.filter(s=>s.done).length} total={subjects.length} onBeginDay={onBeginDay} exp={exp} streak={streak} dayIndex={dayIndex} totalDays={totalDays} expMultiplier={expMultiplier}/>
           <ScheduleStatusBanner status={scheduleStatus} dday={dday} catchupSubjects={catchupSubjects} onStartCatchup={onStart} onPreviewPlan={() => onNav("weekly-plan")}/>
-          <TodaysMissions subjects={subjects} onStart={onStart} onViewWeeklyPlan={() => onNav("weekly-plan")} beforeStart={scheduleStatus === "before"}/>
+          <TodaysMissions subjects={subjects} onStart={onStart} onViewWeeklyPlan={() => onNav("weekly-plan")} onViewStudyLog={() => onNav("study-log")} beforeStart={scheduleStatus === "before"}/>
         </div>
         {/* Right sidebar — fixed 320px */}
         <aside className="lg:w-[320px] flex-shrink-0 space-y-5">
@@ -6025,6 +6130,7 @@ const SCREEN_TITLES: Partial<Record<Screen, string>> = {
   "goal-setting":      "2학기 중간고사 목표점수",
   "schedule-list":     "전체 일정표",
   "weekly-plan":       "이번 주 계획",
+  "study-log":         "학습 기록",
 };
 
 const SCREEN_BACK: Partial<Record<Screen, Screen>> = {
@@ -6045,6 +6151,7 @@ const SCREEN_BACK: Partial<Record<Screen, Screen>> = {
   "goal-setting":     "home",
   "schedule-list":    "calendar",
   "weekly-plan":      "home",
+  "study-log":        "home",
 };
 
 // ── localStorage helpers ──────────────────────────────────────────────────────
@@ -6057,8 +6164,40 @@ const LS_DAY_PLANS = "wh-day-plans-v1";
 const LS_LAST_DATE = "wh-last-date-v1";
 const LS_ALLOWANCE_PAID    = "wh-allowance-paid-v1";
 const LS_ALLOWANCE_PENDING = "wh-allowance-pending-v1";
+const LS_STUDY_LOG = "wh-study-log-v1";
 
 type AllowanceRequest = { amount: number; requestedAt: string };
+type StudyLogEntry = { subjectId:string; missionText:string; elapsedSeconds:number; photoDataUrl:string; completedAt:string };
+type StudyLog = Record<string, StudyLogEntry[]>;
+
+/** 사진을 작게 압축해서 data URL로 반환 — localStorage/DB에 저장 가능한 크기로 줄인다 */
+function compressImageFile(file: File, maxDim = 640, quality = 0.6): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > height && width > maxDim) { height = Math.round(height * maxDim / width); width = maxDim; }
+      else if (height >= width && height > maxDim) { width = Math.round(width * maxDim / height); height = maxDim; }
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { URL.revokeObjectURL(objectUrl); reject(new Error("no 2d context")); return; }
+      ctx.drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(objectUrl);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error("image load failed")); };
+    img.src = objectUrl;
+  });
+}
+
+function formatDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  if (m <= 0) return `${s}초`;
+  return s > 0 ? `${m}분 ${s}초` : `${m}분`;
+}
 
 function loadLS<T>(key: string, fallback: T): T {
   try {
@@ -6094,6 +6233,10 @@ export default function App() {
   // 용돈 — EXP가 그대로 원(1EXP=1원). 이미 지급된 금액은 빼고 계산한다 (exp 자체는 레벨용이라 건드리지 않음)
   const [allowancePaid, setAllowancePaid] = useState<number>(() => loadLS(LS_ALLOWANCE_PAID, 0));
   const [allowancePending, setAllowancePending] = useState<AllowanceRequest | null>(() => loadLS(LS_ALLOWANCE_PENDING, null));
+  // 날짜별 학습 기록(사진·공부 시간) — 미션 완료 시마다 쌓인다. 실제 완료 증빙 자료
+  const [studyLog, setStudyLog] = useState<StudyLog>(() => loadLS(LS_STUDY_LOG, {}));
+  // 지금 진행 중인 미션에서 실제로 집중한 시간(초) — Focus 화면 완료 시점에 기록되고 사진 화면을 거쳐 학습 기록에 저장된다
+  const [selectedElapsedSeconds, setSelectedElapsedSeconds] = useState(0);
   // 과목 체크할 때마다 "반영됐어요" 확인 토스트 — 바로 적용된다는 걸 눈으로 보여줌
   const [planToast, setPlanToast] = useState<string | null>(null);
   const planToastTimer = useRef<number | undefined>(undefined);
@@ -6107,6 +6250,11 @@ export default function App() {
   useEffect(() => { localStorage.setItem(LS_DAY_PLANS, JSON.stringify(dayPlans)); }, [dayPlans]);
   useEffect(() => { localStorage.setItem(LS_ALLOWANCE_PAID, JSON.stringify(allowancePaid)); }, [allowancePaid]);
   useEffect(() => { localStorage.setItem(LS_ALLOWANCE_PENDING, JSON.stringify(allowancePending)); }, [allowancePending]);
+  // 사진이 쌓이면 용량이 커질 수 있어 저장 실패(용량 초과)해도 앱이 멈추지 않게 방어
+  useEffect(() => {
+    try { localStorage.setItem(LS_STUDY_LOG, JSON.stringify(studyLog)); }
+    catch { console.warn("학습 기록 저장 공간이 부족해요 — 오래된 사진부터 정리가 필요할 수 있어요."); }
+  }, [studyLog]);
 
   // ── 가족 공유 동기화 (Supabase) ────────────────────────────────────────────────
   // familyId: 링크의 ?fam= 값이 있으면 그걸, 없으면 이 기기에 저장된 값, 그것도 없으면 새로 발급
@@ -6132,6 +6280,7 @@ export default function App() {
         if (remote.allowancePending === null || (remote.allowancePending && typeof remote.allowancePending === "object")) {
           setAllowancePending(remote.allowancePending as AllowanceRequest | null);
         }
+        if (remote.studyLog && typeof remote.studyLog === "object") setStudyLog(remote.studyLog as StudyLog);
       }
       setCloudReady(true);
     });
@@ -6144,10 +6293,10 @@ export default function App() {
     if (!supabaseEnabled || !cloudReady) return;
     if (cloudSaveTimer.current) window.clearTimeout(cloudSaveTimer.current);
     cloudSaveTimer.current = window.setTimeout(() => {
-      saveFamilyData(familyId, { exp, streak, goalScores, history, notifications, dayPlans, allowancePaid, allowancePending });
+      saveFamilyData(familyId, { exp, streak, goalScores, history, notifications, dayPlans, allowancePaid, allowancePending, studyLog });
     }, 700);
     return () => { if (cloudSaveTimer.current) window.clearTimeout(cloudSaveTimer.current); };
-  }, [exp, streak, goalScores, history, notifications, dayPlans, allowancePaid, allowancePending, cloudReady, familyId]);
+  }, [exp, streak, goalScores, history, notifications, dayPlans, allowancePaid, allowancePending, studyLog, cloudReady, familyId]);
 
   const handleGoalChange = (id: string, v: number) =>
     setGoalScores(prev => ({ ...prev, [id]: v }));
@@ -6220,10 +6369,19 @@ export default function App() {
   };
 
   // Called when photo is submitted (mission fully completed)
-  const handleMissionComplete = () => {
+  const handleMissionComplete = (photoDataUrl: string) => {
     const studySub = EXAM_SUBJECTS.find(s => s.id === selectedId);
     if (studySub) {
       const beforeBadges = getBadgeStatus({ exp, streak, history, dayPlans });
+
+      // 학습 기록에 사진·공부 시간 저장 — "학습 기록" 화면에서 확인 가능
+      setStudyLog(prev => ({
+        ...prev,
+        [todayStr]: [
+          ...(prev[todayStr] ?? []),
+          { subjectId: selectedId, missionText: selectedMissionText, elapsedSeconds: selectedElapsedSeconds, photoDataUrl, completedAt: new Date().toISOString() },
+        ],
+      }));
 
       // 지난 주까지 연속으로 다 채운 주가 몇 주인지에 따라 이번 주 EXP 배수가 정해진다 (다음 주부터 적용)
       const multiplier = getExpMultiplier(getConsecutiveCompleteWeeks(history, todayStr, dayPlans));
@@ -6344,7 +6502,9 @@ export default function App() {
           <MissionDetailScreen subjectId={selectedId} missionText={selectedMissionText} onStart={()=>goTo("focus")} onBack={()=>goTo("select")}/>
         )}
         {screen === "focus" && (
-          <FocusScreen subjectId={selectedId} missionText={selectedMissionText} onComplete={()=>goTo("photo")} onBack={()=>goTo("mission")} goalScore={goalScores[selectedId]}/>
+          <FocusScreen subjectId={selectedId} missionText={selectedMissionText}
+            onComplete={(elapsed)=>{ setSelectedElapsedSeconds(elapsed); goTo("photo"); }}
+            onBack={()=>goTo("mission")} goalScore={goalScores[selectedId]}/>
         )}
         {screen === "photo" && (
           <PhotoScreen subjectId={selectedId} missionText={selectedMissionText} onSubmit={handleMissionComplete} onBack={()=>goTo("focus")}/>
@@ -6392,6 +6552,7 @@ export default function App() {
             allowancePending={allowancePending}
             onRequestAllowance={handleRequestAllowance}
             onConfirmPayout={handleConfirmPayout}
+            onViewStudyLog={()=>goTo("study-log")}
           />
         )}
         {screen === "calendar" && (
@@ -6439,6 +6600,7 @@ export default function App() {
             exp={exp} streak={streak} history={history} dayPlans={dayPlans}
             onCalendar={()=>goTo("calendar")}
             onSchedule={()=>goTo("schedule-list")}
+            onViewStudyLog={()=>goTo("study-log")}
           />
         )}
         {screen === "goal-setting" && (
@@ -6446,6 +6608,9 @@ export default function App() {
         )}
         {screen === "weekly-plan" && (
           <WeeklyPlanScreen dayPlans={dayPlans} history={history} onToggle={toggleDaySubject} onDone={()=>goTo("home")}/>
+        )}
+        {screen === "study-log" && (
+          <StudyLogScreen studyLog={studyLog}/>
         )}
 
         {showNav && (
