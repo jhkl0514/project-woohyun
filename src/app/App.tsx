@@ -352,6 +352,38 @@ function getCurrentWeekStatus(history: Record<string, string[]>, todayStr: strin
   });
 }
 
+/** 그 주(월~일)에 공부일이 있고, 배정된 과목을 전부 끝냈으면 "완료한 주" */
+function isWeekFullyComplete(weekStart: string, history: Record<string, string[]>, dayPlans: DayPlanOverrides): boolean {
+  const weekEnd = addDaysStr(weekStart, 6);
+  const studyDays = FULL_SCHEDULE.filter(d => d.kind === "study" && diffDaysStr(weekStart, d.date) >= 0 && diffDaysStr(d.date, weekEnd) >= 0);
+  if (studyDays.length === 0) return false;
+  return studyDays.every(d => {
+    const planned = getCheckedSubjectIds(d.date, dayPlans);
+    return planned.length > 0 && (history[d.date] ?? []).filter(id => planned.includes(id)).length >= planned.length;
+  });
+}
+
+/** 오늘이 속한 주의 "직전"까지, 몇 주 연속으로 완료했는지 — 이번 주 실적은 포함하지 않음(다음 주부터 배수 적용) */
+function getConsecutiveCompleteWeeks(history: Record<string, string[]>, todayStr: string, dayPlans: DayPlanOverrides): number {
+  const { start: currentWeekStart } = getWeekRange(todayStr);
+  let cursor = addDaysStr(currentWeekStart, -7);
+  let streak = 0;
+  while (isWeekFullyComplete(cursor, history, dayPlans)) {
+    streak++;
+    cursor = addDaysStr(cursor, -7);
+  }
+  return streak;
+}
+
+/** 연속 완료 주 수 → 다음 주에 적용할 EXP 배수 */
+function getExpMultiplier(consecutiveWeeks: number): number {
+  if (consecutiveWeeks >= 8) return 5;
+  if (consecutiveWeeks >= 6) return 4;
+  if (consecutiveWeeks >= 4) return 3;
+  if (consecutiveWeeks >= 2) return 2;
+  return 1;
+}
+
 const JOURNEY_STEPS: Array<{ num: string; label: string; icon: LucideIcon; color: string; bg: string }> = [
   { num:"01", label:"준비",    icon:Sun,        color:T.blue,    bg:"#EFF6FF" },
   { num:"02", label:"공부",    icon:BookOpen,   color:T.indigo,  bg:"#EDE9FE" },
@@ -778,9 +810,9 @@ function BottomNav({ active, onSelect }: { active:number; onSelect:(i:number)=>v
 
 // ─── HOME SCREEN COMPONENTS ───────────────────────────────────────────────────
 
-function HeroSection({ completed, total, onBeginDay, exp, streak, dayIndex, totalDays }: {
+function HeroSection({ completed, total, onBeginDay, exp, streak, dayIndex, totalDays, expMultiplier }: {
   completed:number; total:number; onBeginDay:()=>void; exp:number; streak:number;
-  dayIndex:number; totalDays:number;
+  dayIndex:number; totalDays:number; expMultiplier:number;
 }) {
   const dayPct = totalDays > 0 ? (dayIndex / totalDays) * 100 : 0;
   const lvl = getLevelInfo(exp);
@@ -833,6 +865,12 @@ function HeroSection({ completed, total, onBeginDay, exp, streak, dayIndex, tota
               <Pill icon={Flame} iconColor="#FCD34D" label="일 연속" value={String(streak)}/>
               <Pill icon={Star}  iconColor="#FCD34D" label={lvl.name} value={`Lv.${lvl.level}`} filled/>
               <Pill icon={Check} iconColor="#4ADE80" label="미션" value={`${completed}/${total}`}/>
+              {expMultiplier > 1 && (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#FCD34D]/20 border border-[#FCD34D]/40">
+                  <span className="text-[13px]">🔥</span>
+                  <span className="text-[#FDE68A] text-[13px] font-bold">이번 주 EXP ×{expMultiplier}</span>
+                </div>
+              )}
             </div>
 
             {/* CTA */}
@@ -1907,8 +1945,9 @@ function ConfettiLayer() {
   );
 }
 
-function RewardScreen({ subjectId, missionText, onNext, onFinish, exp }: {
+function RewardScreen({ subjectId, missionText, onNext, onFinish, exp, awardedExp, multiplier }: {
   subjectId:string; missionText:string; onNext:()=>void; onFinish:()=>void; exp:number;
+  awardedExp:number; multiplier:number;
 }) {
   const subject = EXAM_SUBJECTS.find(s=>s.id===subjectId) ?? EXAM_SUBJECTS[0];
   const Icon    = subject.icon;
@@ -1926,8 +1965,14 @@ function RewardScreen({ subjectId, missionText, onNext, onFinish, exp }: {
             <SeedCharacterCelebrating className="w-32 h-auto mx-auto mb-4 drop-shadow-xl float-soft"/>
             <div className="exp-pop inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-white/20 border border-white/30 mb-4">
               <Zap className="w-5 h-5 text-[#FCD34D]" fill="#FCD34D"/>
-              <span className="text-white text-xl font-bold">+{subject.exp} EXP 획득!</span>
+              <span className="text-white text-xl font-bold">+{awardedExp} EXP 획득!</span>
             </div>
+            {multiplier > 1 && (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FCD34D]/20 border border-[#FCD34D]/40 mb-3">
+                <span className="text-sm">🔥</span>
+                <span className="text-[#FDE68A] text-[13px] font-bold">연속 완료 보너스 ×{multiplier} 적용!</span>
+              </div>
+            )}
             <h2 className="text-2xl md:text-3xl font-bold text-white leading-tight tracking-tight mb-2">
               오늘의 미션 완료!
             </h2>
@@ -1954,7 +1999,7 @@ function RewardScreen({ subjectId, missionText, onNext, onFinish, exp }: {
                 <Zap className="w-5 h-5 text-white" fill="white"/>
               </div>
               <div>
-                <p className="font-bold text-[#1E40AF]">경험치 +{subject.exp}</p>
+                <p className="font-bold text-[#1E40AF]">경험치 +{awardedExp}</p>
                 <p className="text-[13px] text-[#1E40AF]/60 mt-0.5">다음 레벨까지 한 걸음 더!</p>
               </div>
               <span className="ml-auto text-sm font-bold text-[#2563EB]">{exp.toLocaleString()} XP</span>
@@ -5866,12 +5911,13 @@ function HomeScreen({
   const todayStr    = toYMD(new Date());
   const totalDays   = FULL_SCHEDULE.length;
   const dayIndex    = Math.min(Math.max(diffDaysStr(STUDY_START_DATE, todayStr) + 1, 0), totalDays);
+  const expMultiplier = getExpMultiplier(getConsecutiveCompleteWeeks(history, todayStr, dayPlans));
   return (
     <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-10 py-6 pb-28 lg:pb-12">
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Left — 8 col equivalent */}
         <div className="flex-1 min-w-0 space-y-6">
-          <HeroSection completed={subjects.filter(s=>s.done).length} total={subjects.length} onBeginDay={onBeginDay} exp={exp} streak={streak} dayIndex={dayIndex} totalDays={totalDays}/>
+          <HeroSection completed={subjects.filter(s=>s.done).length} total={subjects.length} onBeginDay={onBeginDay} exp={exp} streak={streak} dayIndex={dayIndex} totalDays={totalDays} expMultiplier={expMultiplier}/>
           <ScheduleStatusBanner status={scheduleStatus} dday={dday} catchupSubjects={catchupSubjects} onStartCatchup={onStart} onPreviewPlan={() => onNav("weekly-plan")}/>
           <TodaysMissions subjects={subjects} onStart={onStart} onViewWeeklyPlan={() => onNav("weekly-plan")} beforeStart={scheduleStatus === "before"}/>
         </div>
@@ -5956,6 +6002,9 @@ export default function App() {
   const [activeNav,  setActiveNav]  = useState(0);
   const [exp,        setExp]        = useState<number>(() => loadLS(LS_EXP, 0));
   const [streak,     setStreak]     = useState<number>(() => loadLS(LS_STREAK, 0));
+  // 보상 화면에 표시할 "이번에 실제로 받은 EXP"와 연속완료 배수 — 저장하지 않는 화면 전용 값
+  const [lastAwardedExp, setLastAwardedExp] = useState(0);
+  const [lastMultiplier, setLastMultiplier] = useState(1);
   // 기말고사 성적표 기반 목표점수 — 기본값은 각 과목의 기말고사 점수
   const [goalScores, setGoalScores] = useState<Record<string, number>>(() => {
     const saved = loadLS<Record<string, number>>(LS_GOALS, {});
@@ -6072,7 +6121,13 @@ export default function App() {
     if (studySub) {
       const beforeBadges = getBadgeStatus({ exp, streak, history, dayPlans });
 
-      const newExp = exp + studySub.exp;
+      // 지난 주까지 연속으로 다 채운 주가 몇 주인지에 따라 이번 주 EXP 배수가 정해진다 (다음 주부터 적용)
+      const multiplier = getExpMultiplier(getConsecutiveCompleteWeeks(history, todayStr, dayPlans));
+      const awarded = studySub.exp * multiplier;
+      setLastAwardedExp(awarded);
+      setLastMultiplier(multiplier);
+
+      const newExp = exp + awarded;
       setExp(newExp);
 
       // 오늘 날짜에 완료 과목 기록 — 달력/일정표/보충학습 계산에 쓰임
@@ -6093,7 +6148,7 @@ export default function App() {
 
       pushNotification({
         category: "reward", icon: "⚡",
-        title: `+${studySub.exp} EXP 획득!`,
+        title: multiplier > 1 ? `+${awarded} EXP 획득! (연속완료 ×${multiplier})` : `+${awarded} EXP 획득!`,
         body: `${studySub.name} 미션을 완료했어요.`,
       });
 
@@ -6197,6 +6252,8 @@ export default function App() {
             onNext={()=>goTo("select")}
             onFinish={()=>goTo("reflection")}
             exp={exp}
+            awardedExp={lastAwardedExp}
+            multiplier={lastMultiplier}
           />
         )}
         {screen === "reflection" && (
