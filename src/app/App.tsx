@@ -1658,8 +1658,13 @@ function FocusScreen({ subjectId, missionText, onComplete, onBack, goalScore }: 
 }) {
   const subject  = EXAM_SUBJECTS.find(s=>s.id===subjectId) ?? EXAM_SUBJECTS[0];
   const TOTAL    = subject.time * 60;
+  // 최소 20분(과목 시간이 그보다 짧으면 그 과목의 전체 시간)은 채워야 완료할 수 있다 —
+  // 몇 초 만에 완료 눌러서 사진만 찍는 걸 막기 위함
+  const MIN_REQUIRED = Math.min(TOTAL, 20 * 60);
   const [timeLeft, setTimeLeft] = useState(TOTAL);
   const [running, setRunning]   = useState(true);
+  const elapsed = TOTAL - timeLeft;
+  const canComplete = elapsed >= MIN_REQUIRED;
 
   useEffect(() => {
     if (!running || timeLeft <= 0) return;
@@ -1773,12 +1778,17 @@ function FocusScreen({ subjectId, missionText, onComplete, onBack, goalScore }: 
             className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm border-2 border-[#E5E7EB] text-[#111827]/75 hover:border-[#111827]/20 hover:text-[#111827] transition-all">
             {running ? <><Pause className="w-4 h-4"/> 일시정지</> : <><Play className="w-4 h-4" fill="currentColor"/> 재개</>}
           </button>
-          <button onClick={()=>onComplete(TOTAL - timeLeft)}
-            className="cta-btn flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm text-white"
-            style={{ background:`linear-gradient(135deg,${subject.color},${T.indigo})`, boxShadow:`0 6px 24px ${subject.color}40` }}>
-            <Check className="w-4 h-4"/> 완료
+          <button onClick={()=>canComplete && onComplete(elapsed)} disabled={!canComplete}
+            className={`cta-btn flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm text-white ${!canComplete ? "opacity-45 cursor-not-allowed" : ""}`}
+            style={{ background:`linear-gradient(135deg,${subject.color},${T.indigo})`, boxShadow: canComplete ? `0 6px 24px ${subject.color}40` : "none" }}>
+            {canComplete ? <><Check className="w-4 h-4"/> 완료</> : `${Math.ceil((MIN_REQUIRED - elapsed) / 60)}분 더 하면 완료 가능`}
           </button>
         </div>
+        {!canComplete && (
+          <p className="text-center text-[12px] text-[#111827]/40 mt-2">
+            최소 {Math.round(MIN_REQUIRED / 60)}분은 집중해야 완료할 수 있어요
+          </p>
+        )}
       </div>
     </main>
   );
