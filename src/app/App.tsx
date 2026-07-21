@@ -4794,9 +4794,14 @@ type SettingsState = {
 const LS_SETTINGS = "wh-settings-v1";
 const DAYS_KR = ["월","화","수","목","금","토","일"];
 
-function SettingsScreen({ onBack, onProfile, onResetData, familyId }: {
+function SettingsScreen({ onBack, onProfile, onResetData, familyId, exp, streak }: {
   onBack:()=>void; onProfile?:()=>void; onResetData?:()=>void; familyId:string;
+  exp:number; streak:number;
 }) {
+  const lvl = getLevelInfo(exp);
+  const todayStr = toYMD(new Date());
+  const totalDays = FULL_SCHEDULE.length;
+  const dayIndex = Math.min(Math.max(diffDaysStr(STUDY_START_DATE, todayStr) + 1, 0), totalDays);
   const [cfg, setCfg] = useState<SettingsState>(() => {
     try {
       const raw = localStorage.getItem(LS_SETTINGS);
@@ -4838,14 +4843,15 @@ function SettingsScreen({ onBack, onProfile, onResetData, familyId }: {
     setCfg(prev => ({ ...prev, [key]: !prev[key] }));
 
   const handleClearData = () => {
-    // 학습 관련 키만 초기화
-    ["wh-subjects-v1","wh-exp-v1","wh-streak-v1","wh-last-date-v1"].forEach(k => localStorage.removeItem(k));
+    // 학습 관련 데이터 전부 초기화 (EXP·스트릭·미션 기록·목표점수·알림 포함)
+    [LS_EXP, LS_STREAK, LS_LAST_DATE, LS_HISTORY, LS_DAY_PLANS, LS_GOALS, LS_NOTIFS]
+      .forEach(k => localStorage.removeItem(k));
     setConfirmClearData(false);
     onResetData?.();
   };
 
   const handleResetGoal = () => {
-    ["wh-exp-v1","wh-streak-v1","wh-last-date-v1"].forEach(k => localStorage.removeItem(k));
+    [LS_EXP, LS_STREAK, LS_LAST_DATE].forEach(k => localStorage.removeItem(k));
     setConfirmReset(false);
     onBack();
   };
@@ -4863,8 +4869,8 @@ function SettingsScreen({ onBack, onProfile, onResetData, familyId }: {
           <div className="flex-1 min-w-0">
             <p className="font-bold text-[#111827] text-base">우현</p>
             <div className="flex items-center gap-2 mt-1">
-              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#D1FAE5] text-[#065F46]">Lv.4 새싹나무</span>
-              <span className="text-[11px] text-[#111827]/35">Day 18 / 42</span>
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#D1FAE5] text-[#065F46]">Lv.{lvl.level} {lvl.name}</span>
+              <span className="text-[11px] text-[#111827]/35">Day {dayIndex} / {totalDays}</span>
             </div>
           </div>
           <button onClick={onProfile}
@@ -6114,11 +6120,14 @@ export default function App() {
             onBack={()=>goTo("home")}
             onProfile={()=>goTo("admin")}
             familyId={familyId}
+            exp={exp} streak={streak}
             onResetData={()=>{
               setExp(0);
               setStreak(0);
               setHistory({});
               setDayPlans({});
+              setGoalScores(Object.fromEntries(EXAM_SUBJECTS.map(s => [s.id, s.examScore])));
+              setNotifications([]);
               goTo("home");
               setActiveNav(0);
             }}
