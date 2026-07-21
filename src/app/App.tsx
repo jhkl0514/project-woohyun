@@ -741,7 +741,7 @@ function TopNav({
               ))}
             </div>
           ) : title ? (
-            <p className="text-[13px] font-bold text-[#111827] truncate">{title}</p>
+            <p className="text-[17px] font-extrabold text-[#111827] tracking-tight truncate">{title}</p>
           ) : null}
         </div>
 
@@ -795,11 +795,14 @@ function BottomNav({ active, onSelect }: { active:number; onSelect:(i:number)=>v
           const isActive = i === active;
           return (
             <button key={i} onClick={() => onSelect(i)}
-              className="relative flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-2xl transition-all"
-              style={{ color:isActive ? T.blue : "#9CA3AF" }}>
-              {isActive && <span className="absolute inset-0 rounded-2xl bg-[#2563EB]/8"/>}
-              <Icon className="w-5 h-5 relative z-10"/>
-              <span className="text-[12px] font-semibold relative z-10">{label}</span>
+              className="relative flex flex-col items-center gap-1 py-2 px-3 rounded-2xl transition-all"
+              style={{ color:isActive ? T.blue : "#4B5563" }}>
+              {isActive && (
+                <span className="absolute inset-0 rounded-2xl" style={{ backgroundColor:"#EFF6FF", border:"1.5px solid #DBEAFE" }}/>
+              )}
+              <Icon className="w-5 h-5 relative z-10" strokeWidth={isActive ? 2.5 : 2}/>
+              <span className={`text-[12px] relative z-10 ${isActive ? "font-extrabold" : "font-semibold"}`}>{label}</span>
+              {isActive && <span className="absolute -bottom-0.5 w-1 h-1 rounded-full z-10" style={{ backgroundColor:T.blue }}/>}
             </button>
           );
         })}
@@ -1334,7 +1337,7 @@ function MomMessageCard() {
             <p className="text-[13px] text-[#9F1239]/45">오늘 7:30 AM · 공부 시작 전</p>
           </div>
         </div>
-        <blockquote className="text-[1.05rem] leading-[1.85] text-[#881337]/85">
+        <blockquote className="text-[1.15rem] leading-[1.85] text-[#881337]/85">
           "우현아,<br/>오늘도 완벽하려고 하지 말고<br/>시작만 해도 성공이야."
         </blockquote>
         <div className="flex items-center gap-3 mt-5 pt-4 border-t border-[#E11D48]/08">
@@ -1365,7 +1368,7 @@ function BriefingScreen({ subjects, onStart, onBack }: { subjects:Subject[]; onS
         <StudyJourney/>
         <MomMessageCard/>
         <div className="hidden lg:flex flex-col items-center gap-4 pt-2 pb-4">
-          <button onClick={handleCTA} className="cta-btn w-full flex items-center justify-center gap-3 py-[18px] rounded-2xl text-white font-bold text-[1.05rem]"
+          <button onClick={handleCTA} className="cta-btn w-full flex items-center justify-center gap-3 py-[18px] rounded-2xl text-white font-bold text-[1.15rem]"
             style={{ background:"linear-gradient(135deg,#1d4ed8,#2563EB 45%,#4f46e5)", boxShadow:"0 8px 40px rgba(37,99,235,0.38)" }}>
             공부 시작하기 <ArrowRight className="w-5 h-5"/>
           </button>
@@ -1376,7 +1379,7 @@ function BriefingScreen({ subjects, onStart, onBack }: { subjects:Subject[]; onS
       </main>
       <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40" style={{ paddingBottom:"env(safe-area-inset-bottom)" }}>
         <div className="backdrop-blur-2xl bg-[#F8FAFC]/90 border-t border-black/5 px-4 pt-4 pb-4" style={{ boxShadow:"0 -8px 32px rgba(17,24,39,0.10)" }}>
-          <div className="cta-btn w-full flex items-center justify-center gap-3 py-[18px] rounded-2xl text-white font-bold text-[1.05rem] cursor-pointer"
+          <div className="cta-btn w-full flex items-center justify-center gap-3 py-[18px] rounded-2xl text-white font-bold text-[1.15rem] cursor-pointer"
             onClick={handleCTA}
             style={{ background:"linear-gradient(135deg,#1d4ed8,#2563EB 45%,#4f46e5)", boxShadow:"0 8px 40px rgba(37,99,235,0.38)", transform:ctaActive?"scale(0.98)":"scale(1)", transition:"transform 0.1s ease" }}>
             공부 시작하기 <ArrowRight className="w-5 h-5"/>
@@ -2049,7 +2052,7 @@ function RewardScreen({ subjectId, missionText, onNext, onFinish, exp, awardedEx
               <Heart className="w-5 h-5 text-[#E11D48]" fill="#E11D48"/>
               <p className="text-sm font-bold text-[#881337]">엄마의 메시지</p>
             </div>
-            <blockquote className="text-[1.05rem] leading-[1.8] text-[#881337]/85">
+            <blockquote className="text-[1.15rem] leading-[1.8] text-[#881337]/85">
               "우현아 정말 잘했어!<br/>엄마가 너무 자랑스러워."
             </blockquote>
           </div>
@@ -2182,7 +2185,7 @@ function EmotionCheck({
     <div className="bg-white/80 backdrop-blur-xl border border-white/90 rounded-3xl p-6"
       style={{ boxShadow:T.cardShadow }}>
       <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">감정 체크</p>
-      <h3 className="text-[1.05rem] font-bold text-[#111827] mb-5">오늘 기분은 어땠어?</h3>
+      <h3 className="text-[1.15rem] font-bold text-[#111827] mb-5">오늘 기분은 어땠어?</h3>
 
       <div className="flex items-stretch gap-2">
         {EMOTIONS.map((e, i) => {
@@ -2234,7 +2237,7 @@ function HardSubjectPicker({
     <div className="bg-white/80 backdrop-blur-xl border border-white/90 rounded-3xl p-6"
       style={{ boxShadow:T.cardShadow }}>
       <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">오늘의 돌아보기</p>
-      <h3 className="text-[1.05rem] font-bold text-[#111827] mb-5">오늘 가장 어려웠던 과목은?</h3>
+      <h3 className="text-[1.15rem] font-bold text-[#111827] mb-5">오늘 가장 어려웠던 과목은?</h3>
 
       <div className="flex flex-wrap gap-2.5">
         {subjects.map(s => {
@@ -2276,7 +2279,7 @@ function JournalCard({
     <div className="bg-white/80 backdrop-blur-xl border border-white/90 rounded-3xl p-6"
       style={{ boxShadow:T.cardShadow }}>
       <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">오늘의 일기</p>
-      <h3 className="text-[1.05rem] font-bold text-[#111827] mb-4">오늘 나에게 한마디</h3>
+      <h3 className="text-[1.15rem] font-bold text-[#111827] mb-4">오늘 나에게 한마디</h3>
 
       <div className="relative">
         {/* Decorative quote marks */}
@@ -2374,7 +2377,7 @@ function TomorrowPreviewCard() {
       <div className="flex items-start justify-between mb-5">
         <div>
           <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-1.5">내일을 미리 보기</p>
-          <h3 className="text-[1.05rem] font-bold text-[#111827]">내일의 미리보기</h3>
+          <h3 className="text-[1.15rem] font-bold text-[#111827]">내일의 미리보기</h3>
         </div>
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#EFF6FF] border border-[#2563EB]/12">
           <div className="w-1.5 h-1.5 rounded-full bg-[#2563EB]"/>
@@ -2595,7 +2598,7 @@ function DREmotionCheck({
   return (
     <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
       <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">감정 체크</p>
-      <h3 className="font-bold text-[#111827] text-[1.02rem] mb-5">오늘 기분은 어땠나요?</h3>
+      <h3 className="font-bold text-[#111827] text-[1.15rem] mb-5">오늘 기분은 어땠나요?</h3>
 
       {/* Emoji row */}
       <div className="flex items-stretch gap-2">
@@ -2646,7 +2649,7 @@ function DRSubjectChips({
     <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
       <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">오늘의 돌아보기</p>
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-bold text-[#111827] text-[1.02rem]">오늘 가장 어려웠던 과목</h3>
+        <h3 className="font-bold text-[#111827] text-[1.15rem]">오늘 가장 어려웠던 과목</h3>
         {selected.size > 0 && (
           <span className="text-[13px] font-bold px-2.5 py-1 rounded-full fade-in-up"
             style={{ backgroundColor:`${T.blue}14`, color:T.blue }}>
@@ -2736,7 +2739,7 @@ function DRReflectionCards({
   return (
     <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
       <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">빠른 회고</p>
-      <h3 className="font-bold text-[#111827] text-[1.02rem] mb-4">오늘을 돌아봐요</h3>
+      <h3 className="font-bold text-[#111827] text-[1.15rem] mb-4">오늘을 돌아봐요</h3>
 
       <div className="space-y-2.5">
         {DR_REFLECTION_PROMPTS.map(({ title, placeholder, icon:Icon, color }, i) => {
@@ -2856,7 +2859,7 @@ function DRMomCard() {
 
         {/* Message */}
         <blockquote
-          className="text-[1.05rem] leading-[1.9] text-[#881337]/84">
+          className="text-[1.15rem] leading-[1.9] text-[#881337]/84">
           "우현아,
           <br/>오늘도 끝까지 해낸 것이 정말 멋졌어.
           <br/>결과보다 끝까지 한 것이 더 중요해."
@@ -2893,7 +2896,7 @@ function DROdayGrowthCard() {
       {/* Header with green accent bar */}
       <div className="flex items-center gap-2.5 mb-4">
         <div className="w-1.5 h-5 rounded-full" style={{ backgroundColor:T.green }}/>
-        <h3 className="font-bold text-[#111827] text-[1.02rem]">오늘의 성장</h3>
+        <h3 className="font-bold text-[#111827] text-[1.15rem]">오늘의 성장</h3>
       </div>
 
       {/* Growth items */}
@@ -3194,7 +3197,7 @@ function TEGrowthTimeline() {
   return (
     <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
       <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">성장 단계</p>
-      <h3 className="font-bold text-[#111827] text-[1.02rem] mb-5">성장 타임라인</h3>
+      <h3 className="font-bold text-[#111827] text-[1.15rem] mb-5">성장 타임라인</h3>
 
       {/* Horizontal scroll — snaps on mobile */}
       <div className="overflow-x-auto -mx-2 px-2" style={{ scrollbarWidth:"none" }}>
@@ -3313,7 +3316,7 @@ function TEAchievementsGrid() {
   return (
     <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
       <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">배지</p>
-      <h3 className="font-bold text-[#111827] text-[1.02rem] mb-4">업적</h3>
+      <h3 className="font-bold text-[#111827] text-[1.15rem] mb-4">업적</h3>
 
       <div className="grid grid-cols-3 gap-3">
         {TE_ACHIEVEMENTS.map(({ label, icon, desc, unlocked }, i) => (
@@ -3359,7 +3362,7 @@ function TEWeeklyChart() {
   return (
     <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
       <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">주간 성장</p>
-      <h3 className="font-bold text-[#111827] text-[1.02rem] mb-5">Weekly Growth</h3>
+      <h3 className="font-bold text-[#111827] text-[1.15rem] mb-5">Weekly Growth</h3>
 
       {/* XP labels row */}
       <div className="flex justify-between mb-1.5">
@@ -3749,7 +3752,7 @@ function GDExamProgressCard({ history, dayPlans, todayStr }: {
   return (
     <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
       <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">진행 현황</p>
-      <h3 className="font-bold text-[#111827] text-[1.02rem] mb-5">중간고사 대비 진행률</h3>
+      <h3 className="font-bold text-[#111827] text-[1.15rem] mb-5">중간고사 대비 진행률</h3>
 
       <div className="flex flex-col sm:flex-row items-center gap-6">
         {/* Circular progress */}
@@ -3810,7 +3813,7 @@ function GDWeeklyLearning({ history, streak, todayStr, dayPlans }: {
       <div className="flex items-center justify-between mb-4">
         <div>
           <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-1">이번 주</p>
-          <h3 className="font-bold text-[#111827] text-[1.02rem]">이번 주 학습</h3>
+          <h3 className="font-bold text-[#111827] text-[1.15rem]">이번 주 학습</h3>
         </div>
         {/* Streak */}
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#FEF3C7] border border-[#F59E0B]/20">
@@ -3867,7 +3870,7 @@ function GDBadgesGrid({ exp, streak, history, dayPlans }: BadgeCtx) {
       <div className="flex items-center justify-between mb-1">
         <div>
           <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-1">업적</p>
-          <h3 className="font-bold text-[#111827] text-[1.02rem]">배지</h3>
+          <h3 className="font-bold text-[#111827] text-[1.15rem]">배지</h3>
         </div>
         <span className="text-[13px] font-bold text-[#111827]/52">{earned} / {badges.length}</span>
       </div>
@@ -3926,7 +3929,7 @@ function GDGrowthStats({ history, streak }: { history:Record<string,string[]>; s
   return (
     <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
       <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">통계</p>
-      <h3 className="font-bold text-[#111827] text-[1.02rem] mb-4">성장 통계</h3>
+      <h3 className="font-bold text-[#111827] text-[1.15rem] mb-4">성장 통계</h3>
       <div className="grid grid-cols-2 gap-3">
         {STATS.map(({ label, value, icon:Icon, color, bg }) => (
           <div key={label}
@@ -3937,7 +3940,7 @@ function GDGrowthStats({ history, streak }: { history:Record<string,string[]>; s
               <Icon className="w-4 h-4" style={{ color }}/>
             </div>
             <div>
-              <p className="text-[1.05rem] font-bold text-[#111827] leading-tight">{value}</p>
+              <p className="text-[1.15rem] font-bold text-[#111827] leading-tight">{value}</p>
               <p className="text-[13px] text-[#111827]/68 mt-0.5">{label}</p>
             </div>
           </div>
@@ -3956,7 +3959,7 @@ function GDNextGoals({ exp, streak, history, dayPlans, onGoalScore }: BadgeCtx &
   return (
     <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
       <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">목표</p>
-      <h3 className="font-bold text-[#111827] text-[1.02rem] mb-4">다음 목표</h3>
+      <h3 className="font-bold text-[#111827] text-[1.15rem] mb-4">다음 목표</h3>
 
       <div className="space-y-2.5 mb-2.5">
         <div className="p-4 rounded-2xl border tap-scale" style={{ backgroundColor:`${T.amber}08`, borderColor:`${T.amber}20` }}>
@@ -4305,7 +4308,7 @@ function CalMonthlyCard({
             className="w-7 h-7 rounded-lg flex items-center justify-center disabled:opacity-25 hover:bg-black/[0.04] transition-colors">
             <ChevronLeft className="w-4 h-4 text-[#111827]/70"/>
           </button>
-          <h3 className="font-bold text-[#111827] text-[1.05rem] w-[104px] text-center">{label}</h3>
+          <h3 className="font-bold text-[#111827] text-[1.15rem] w-[104px] text-center">{label}</h3>
           <button onClick={() => setMonthIdx(i => Math.min(RANGE_MONTHS.length - 1, i + 1))} disabled={monthIdx === RANGE_MONTHS.length - 1}
             className="w-7 h-7 rounded-lg flex items-center justify-center disabled:opacity-25 hover:bg-black/[0.04] transition-colors">
             <ChevronRight className="w-4 h-4 text-[#111827]/70"/>
@@ -4379,7 +4382,7 @@ function CalDayDetail({ date, history, dayPlans }: {
   if (!sched) {
     return (
       <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
-        <h3 className="font-bold text-[#111827] text-[1.05rem] mb-2">{dateLabel}</h3>
+        <h3 className="font-bold text-[#111827] text-[1.15rem] mb-2">{dateLabel}</h3>
         <p className="text-sm text-[#111827]/58">학습 기간(7/21~10/2) 밖의 날짜예요.</p>
       </div>
     );
@@ -4389,7 +4392,7 @@ function CalDayDetail({ date, history, dayPlans }: {
     return (
       <div className={`${T.glassCard} rounded-3xl p-6 fade-in-up`} style={{ boxShadow:T.cardShadow }}>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-bold text-[#111827] text-[1.05rem]">{dateLabel}</h3>
+          <h3 className="font-bold text-[#111827] text-[1.15rem]">{dateLabel}</h3>
           <span className="text-[13px] font-bold px-2.5 py-1 rounded-xl bg-[#FFF1F2] text-[#9F1239]">🎯 중간고사</span>
         </div>
         <p className="text-sm text-[#111827]/72 leading-relaxed">그동안 준비한 만큼 실력을 보여줄 시간이야. 우현이 파이팅! 💪</p>
@@ -4407,7 +4410,7 @@ function CalDayDetail({ date, history, dayPlans }: {
         <div className="flex items-start justify-between mb-4">
           <div>
             <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-1">날짜 상세</p>
-            <h3 className="font-bold text-[#111827] text-[1.05rem]">{dateLabel}</h3>
+            <h3 className="font-bold text-[#111827] text-[1.15rem]">{dateLabel}</h3>
           </div>
           <span className="text-[13px] font-bold px-2.5 py-1 rounded-xl"
             style={{
@@ -4451,7 +4454,7 @@ function CalDayDetail({ date, history, dayPlans }: {
       <div className="flex items-start justify-between mb-4">
         <div>
           <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-1">보충일</p>
-          <h3 className="font-bold text-[#111827] text-[1.05rem]">{dateLabel}</h3>
+          <h3 className="font-bold text-[#111827] text-[1.15rem]">{dateLabel}</h3>
         </div>
         <span className="text-[13px] font-bold px-2.5 py-1 rounded-xl bg-[#EDE9FE] text-[#5B21B6]">
           {sched.kind === "holiday" ? (sched.label ?? "공휴일") : "주말"}
@@ -4523,7 +4526,7 @@ function CalStatistics({ history, streak }: { history:Record<string,string[]>; s
   return (
     <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
       <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">통계</p>
-      <h3 className="font-bold text-[#111827] text-[1.02rem] mb-4">7.21 ~ 10.2 누적</h3>
+      <h3 className="font-bold text-[#111827] text-[1.15rem] mb-4">7.21 ~ 10.2 누적</h3>
 
       <div className="grid grid-cols-3 gap-3">
         {STATS.map(({ label, value, icon:Icon, color, bg }) => (
@@ -4751,7 +4754,7 @@ function MomMessageComposer({ onSend }: { onSend:(msg:string)=>void }) {
   return (
     <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
       <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">응원 메시지</p>
-      <h3 className="font-bold text-[#111827] text-[1.02rem] mb-4">우현이에게 메시지 보내기</h3>
+      <h3 className="font-bold text-[#111827] text-[1.15rem] mb-4">우현이에게 메시지 보내기</h3>
 
       {/* Quick templates */}
       <div className="flex flex-wrap gap-2 mb-4">
@@ -4860,7 +4863,7 @@ function MomDashboardScreen({ onBack }: { onBack:()=>void }) {
       {/* Weekly record */}
       <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
         <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">이번 주</p>
-        <h3 className="font-bold text-[#111827] text-[1.02rem] mb-4">주간 출석</h3>
+        <h3 className="font-bold text-[#111827] text-[1.15rem] mb-4">주간 출석</h3>
         <div className="grid grid-cols-7 gap-1.5">
           {MOM_WEEKLY_STATS.map(({ day, done, today }:{day:string;done:boolean;today?:boolean}, i)=>(
             <div key={i} className="flex flex-col items-center gap-1.5">
@@ -4884,7 +4887,7 @@ function MomDashboardScreen({ onBack }: { onBack:()=>void }) {
       {/* 42-day progress */}
       <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
         <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">프로젝트 현황</p>
-        <h3 className="font-bold text-[#111827] text-[1.02rem] mb-4">42일 프로젝트 진행률</h3>
+        <h3 className="font-bold text-[#111827] text-[1.15rem] mb-4">42일 프로젝트 진행률</h3>
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm text-[#111827]/65">Day 18 / 42</span>
           <span className="text-sm font-bold text-[#2563EB]">43%</span>
@@ -5081,12 +5084,13 @@ type SettingsState = {
 const LS_SETTINGS = "wh-settings-v1";
 const DAYS_KR = ["월","화","수","목","금","토","일"];
 
-function SettingsScreen({ onBack, onProfile, onResetData, familyId, exp, streak, deviceRole, parentPinHash, onSelectChildRole, onSelectParentRole }: {
+function SettingsScreen({ onBack, onProfile, onResetData, familyId, exp, streak, deviceRole, parentPinHash, onSelectChildRole, onSelectParentRole, onChangePin }: {
   onBack:()=>void; onProfile?:()=>void; onResetData?:()=>void; familyId:string;
   exp:number; streak:number; deviceRole:DeviceRole; parentPinHash:string | null;
-  onSelectChildRole:()=>void; onSelectParentRole:(hash:string)=>void;
+  onSelectChildRole:()=>void; onSelectParentRole:(hash:string)=>void; onChangePin:(hash:string)=>void;
 }) {
   const [showPin, setShowPin] = useState(false);
+  const [pinChangeStep, setPinChangeStep] = useState<"verify-old" | "create-new" | null>(null);
   const lvl = getLevelInfo(exp);
   const todayStr = toYMD(new Date());
   const totalDays = FULL_SCHEDULE.length;
@@ -5216,6 +5220,12 @@ function SettingsScreen({ onBack, onProfile, onResetData, familyId, exp, streak,
             👪 부모님 폰
           </button>
         </div>
+        {deviceRole === "parent" && parentPinHash && (
+          <button onClick={() => setPinChangeStep("verify-old")}
+            className="w-full mt-3 py-2.5 rounded-xl text-[13px] font-semibold text-[#111827]/55 border-2 border-[#E5E7EB] hover:bg-[#F8FAFC] transition-colors">
+            부모님 PIN 변경
+          </button>
+        )}
       </div>
 
       {/* ── 알림 설정 ── */}
@@ -5421,6 +5431,21 @@ function SettingsScreen({ onBack, onProfile, onResetData, familyId, exp, streak,
         onSuccess={(hash) => { onSelectParentRole(hash); setShowPin(false); }}
       />
     )}
+    {pinChangeStep === "verify-old" && (
+      <PinPrompt
+        mode="verify"
+        verifyHash={parentPinHash}
+        onCancel={() => setPinChangeStep(null)}
+        onSuccess={() => setPinChangeStep("create-new")}
+      />
+    )}
+    {pinChangeStep === "create-new" && (
+      <PinPrompt
+        mode="create"
+        onCancel={() => setPinChangeStep(null)}
+        onSuccess={(hash) => { onChangePin(hash); setPinChangeStep(null); }}
+      />
+    )}
     </>
   );
 }
@@ -5600,7 +5625,7 @@ function AdminDashboardScreen({ exp, streak, history, dayPlans, onCalendar, onSc
       {/* Subject completion */}
       <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
         <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">과목별</p>
-        <h3 className="font-bold text-[#111827] text-[1.02rem] mb-4">과목별 완료율</h3>
+        <h3 className="font-bold text-[#111827] text-[1.15rem] mb-4">과목별 완료율</h3>
         <div className="space-y-4">
           {subjectStats.map(({ id, name, done, total, time, color, icon:Icon }) => {
             const pct  = total > 0 ? Math.round((done / total) * 100) : 0;
@@ -5628,7 +5653,7 @@ function AdminDashboardScreen({ exp, streak, history, dayPlans, onCalendar, onSc
       {/* Weekly XP bar chart */}
       <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
         <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">주차별 XP</p>
-        <h3 className="font-bold text-[#111827] text-[1.02rem] mb-5">주차별 경험치</h3>
+        <h3 className="font-bold text-[#111827] text-[1.15rem] mb-5">주차별 경험치</h3>
         <div className="flex items-end justify-between gap-2" style={{ height:90 }}>
           {weeklyXP.map(({ week, xp, start, end }, i)=>{
             const h = xp > 0 ? Math.max(Math.round((xp/maxXp)*82),6) : 4;
@@ -5653,7 +5678,7 @@ function AdminDashboardScreen({ exp, streak, history, dayPlans, onCalendar, onSc
       {/* 캘린더 / 일정표 바로가기 */}
       <div className={`${T.glassCard} rounded-3xl p-6`} style={{ boxShadow:T.cardShadow }}>
         <p className="text-[13px] font-mono text-[#111827]/48 uppercase tracking-[0.35em] mb-2">더 보기</p>
-        <h3 className="font-bold text-[#111827] text-[1.02rem] mb-4">일별 현황 자세히 보기</h3>
+        <h3 className="font-bold text-[#111827] text-[1.15rem] mb-4">일별 현황 자세히 보기</h3>
         <div className="grid grid-cols-2 gap-3">
           <button onClick={onCalendar}
             className="flex flex-col items-center gap-2 p-4 rounded-2xl tap-scale" style={{ backgroundColor:"#EFF6FF" }}>
@@ -6797,6 +6822,7 @@ export default function App() {
             parentPinHash={parentPinHash}
             onSelectChildRole={() => setDeviceRole("child")}
             onSelectParentRole={(hash) => { if (!parentPinHash) setParentPinHash(hash); setDeviceRole("parent"); }}
+            onChangePin={setParentPinHash}
             onResetData={()=>{
               setExp(0);
               setStreak(0);
