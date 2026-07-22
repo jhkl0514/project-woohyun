@@ -1664,18 +1664,49 @@ function FocusScreen({ subjectId, missionText, onComplete, onBack, goalScore }: 
   // 최소 20분(과목 시간이 그보다 짧으면 그 과목의 전체 시간)은 채워야 완료할 수 있다 —
   // 몇 초 만에 완료 눌러서 사진만 찍는 걸 막기 위함
   const MIN_REQUIRED = Math.min(TOTAL, 20 * 60);
-  const [timeLeft, setTimeLeft] = useState(TOTAL);
-  const [running, setRunning]   = useState(true);
-  const elapsed = TOTAL - timeLeft;
+  const [running, setRunning] = useState(true);
+  // 화면 꺼짐/백그라운드로 setInterval이 멈춰도 정확히 흐르도록,
+  // "몇 번 틱했는지"가 아니라 실제 시각(Date.now()) 차이로 경과 시간을 계산한다.
+  const runStartRef = useRef(Date.now());
+  const pausedElapsedMsRef = useRef(0);
+  const computeElapsedSec = () => {
+    const extraMs = running ? Date.now() - runStartRef.current : 0;
+    return Math.min(TOTAL, Math.floor((pausedElapsedMsRef.current + extraMs) / 1000));
+  };
+  const [elapsed, setElapsed] = useState(computeElapsedSec);
+  const timeLeft = TOTAL - elapsed;
   const canComplete = elapsed >= MIN_REQUIRED;
 
   useEffect(() => {
-    if (!running || timeLeft <= 0) return;
-    const id = window.setInterval(() => setTimeLeft(t => Math.max(0, t - 1)), 1000);
+    if (!running) return;
+    const tick = () => setElapsed(computeElapsedSec());
+    tick();
+    const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
-  }, [running, timeLeft]);
+  }, [running]);
 
-  useEffect(() => { if (timeLeft === 0) onComplete(TOTAL); }, [timeLeft, onComplete, TOTAL]);
+  // 화면이 다시 켜지거나 앱이 포그라운드로 돌아왔을 때 즉시 실제 경과 시간으로 보정
+  useEffect(() => {
+    const onWake = () => { if (document.visibilityState === "visible") setElapsed(computeElapsedSec()); };
+    document.addEventListener("visibilitychange", onWake);
+    window.addEventListener("focus", onWake);
+    window.addEventListener("pageshow", onWake);
+    return () => {
+      document.removeEventListener("visibilitychange", onWake);
+      window.removeEventListener("focus", onWake);
+      window.removeEventListener("pageshow", onWake);
+    };
+  }, [running]);
+
+  const toggleRunning = () => {
+    setRunning(r => {
+      if (r) pausedElapsedMsRef.current += Date.now() - runStartRef.current;
+      else runStartRef.current = Date.now();
+      return !r;
+    });
+  };
+
+  useEffect(() => { if (elapsed >= TOTAL) onComplete(TOTAL); }, [elapsed, TOTAL, onComplete]);
 
   const mm   = String(Math.floor(timeLeft / 60)).padStart(2, "0");
   const ss   = String(timeLeft % 60).padStart(2, "0");
@@ -1777,7 +1808,7 @@ function FocusScreen({ subjectId, missionText, onComplete, onBack, goalScore }: 
 
         {/* Control buttons */}
         <div className="flex items-center gap-3 w-full">
-          <button onClick={()=>setRunning(r=>!r)}
+          <button onClick={toggleRunning}
             className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm border-2 border-[#E5E7EB] text-[#111827]/75 hover:border-[#111827]/20 hover:text-[#111827] transition-all">
             {running ? <><Pause className="w-4 h-4"/> 일시정지</> : <><Play className="w-4 h-4" fill="currentColor"/> 재개</>}
           </button>
