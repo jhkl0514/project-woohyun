@@ -5230,6 +5230,32 @@ function SettingsScreen({ onBack, onProfile, onResetData, familyId, exp, streak,
         )}
       </div>
 
+      {/* ── 가이드 · 소개 페이지 ── */}
+      <div className={`${T.glassCard} rounded-3xl overflow-hidden`} style={{ boxShadow:T.cardShadow }}>
+        <a href="/guide.html" target="_blank" rel="noopener"
+          className="w-full flex items-center gap-3 px-5 py-4 border-b border-[#111827]/06 hover:bg-[#F8FAFC] transition-colors text-left">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background:`linear-gradient(135deg,${T.blue},${T.indigo})` }}>
+            <span className="text-lg">📘</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-[#111827]">아이용 사용법 가이드</p>
+            <p className="text-[13px] text-[#111827]/58 mt-0.5">우현이한테 보내는 사용법 페이지</p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-[#111827]/45"/>
+        </a>
+        <a href="/about.html" target="_blank" rel="noopener"
+          className="w-full flex items-center gap-3 px-5 py-4 hover:bg-[#F8FAFC] transition-colors text-left">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background:"linear-gradient(135deg,#334155,#0F172A)" }}>
+            <span className="text-lg">📝</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-[#111827]">프로젝트 소개 · 운영 매뉴얼</p>
+            <p className="text-[13px] text-[#111827]/58 mt-0.5">기획 배경, 기술 구성, 운영 FAQ</p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-[#111827]/45"/>
+        </a>
+      </div>
+
       {/* ── 알림 설정 ── */}
       <div>
         <p className="text-[13px] font-mono text-[#111827]/55 uppercase tracking-[0.3em] mb-3 px-1">알림 설정</p>
