@@ -934,6 +934,29 @@ VITE_SUPABASE_ANON_KEY=여기에_anon_key_붙여넣기</code></pre>
         </div>
       </div>
 
+      <div class="faq-item">
+        <div class="faq-q"><span class="q-mark">Q</span><p>대화가 길어지면 Claude Code가 느려지거나 이전 내용을 잊어버리나요? <code>/compact</code>, <code>/context</code>는 뭔가요?</p></div>
+        <div class="faq-a">
+          <p>Claude Code는 대화를 나눌수록 "컨텍스트"(지금까지의 대화·읽은 파일 내용)가 쌓인다. 이게 가득 차면 자동으로 오래된 부분을 요약해버리는데, 이 과정에서 세부 내용이 뭉개질 수 있다. 그래서 적당한 시점에 직접 정리해주는 게 좋다.</p>
+
+          <p class="m-subhead" style="margin-top:14px;">꼭 알아두면 좋은 명령어</p>
+          <ul class="m-list">
+            <li><code>/context</code> — 지금 대화가 컨텍스트 용량을 얼마나 쓰고 있는지 보여준다. 답답할 때 이걸로 먼저 확인</li>
+            <li><code>/compact</code> — 지금까지 대화를 요약해서 용량을 비운다. 요약이라 세부 내용이 조금 손실될 수 있음 (그래서 아래 루틴 추천)</li>
+            <li><code>/clear</code> — 요약 없이 대화를 완전히 새로 시작한다. 지금 작업과 상관없는 새 주제를 시작할 때 적합 (예: 완전히 다른 앱 얘기)</li>
+            <li><code>/help</code> — Claude Code 사용법 전반에 대한 도움말</li>
+          </ul>
+          <div class="m-note">일부 명령어(예: <code>/statusline</code> 같은 터미널 전용 설정 명령)는 지금 쓰는 VS Code 확장 환경에서는 지원되지 않을 수 있다 — "이 환경에서 사용할 수 없다"는 메시지가 뜨면 그런 경우다.</div>
+
+          <p class="m-subhead">실전 루틴 (추천)</p>
+          <ol class="m-steps">
+            <li>기능 하나가 끝났거나, 큰 파일을 여러 번 읽고 스크린샷을 많이 찍은 직후 — "지금까지 내용 WORK_STATUS.md에 반영해줘"라고 요청</li>
+            <li>파일에 반영된 걸 확인했으면 <code>/compact</code> 실행</li>
+          </ol>
+          <p style="font-size:13.5px; color:var(--ink-soft); margin:8px 0 0; line-height:1.55;">이렇게 하면 중요한 사실이 대화 기억이 아니라 <b>파일(WORK_STATUS.md)</b>에 남기 때문에, 압축 타이밍이 조금 이르거나 늦어도 크게 걱정할 필요가 없다.</p>
+        </div>
+      </div>
+
     </div>
   </section>
 
